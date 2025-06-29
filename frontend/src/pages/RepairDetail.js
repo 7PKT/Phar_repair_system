@@ -26,7 +26,8 @@ import {
   ZoomIn,
   ZoomOut,
   Share2,
-  MoreVertical
+  MoreVertical,
+  UserCheck // เพิ่ม icon สำหรับสถานะ assigned
 } from 'lucide-react';
 
 const RepairDetail = () => {
@@ -248,13 +249,20 @@ const RepairDetail = () => {
     setSelectedImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
+  // ✅ Fixed: เพิ่มการรองรับสถานะ assigned ที่ขาดหายไป + รองรับ empty string
   const getStatusIcon = (status) => {
     const iconSize = isMobile ? "w-5 h-5" : "w-6 h-6";
+    
+    // ✅ จัดการกรณี status เป็นค่าว่างหรือ null/undefined
+    if (!status || status === '') {
+      return <AlertCircle className={`${iconSize} text-gray-500`} />;
+    }
+    
     switch (status) {
       case 'pending':
         return <Clock className={`${iconSize} text-orange-500`} />;
       case 'assigned':
-        return <User className={`${iconSize} text-purple-500`} />;
+        return <UserCheck className={`${iconSize} text-purple-500`} />; // ✅ เพิ่มไอคอนสำหรับ assigned
       case 'in_progress':
         return <AlertCircle className={`${iconSize} text-blue-500`} />;
       case 'completed':
@@ -266,10 +274,16 @@ const RepairDetail = () => {
     }
   };
 
+  // ✅ Fixed: เพิ่มการรองรับสถานะ assigned ที่ขาดหายไป + รองรับ empty string
   const getStatusText = (status) => {
+    // ✅ จัดการกรณี status เป็นค่าว่างหรือ null/undefined
+    if (!status || status === '') {
+      return 'ไม่ระบุสถานะ';
+    }
+    
     const statusMap = {
       'pending': 'รอดำเนินการ',
-      'assigned': 'มอบหมายแล้ว',
+      'assigned': 'มอบหมายแล้ว', // ✅ เพิ่มสถานะที่ขาดหายไป
       'in_progress': 'กำลังดำเนินการ',
       'completed': 'เสร็จสิ้น',
       'cancelled': 'ยกเลิก'
@@ -277,10 +291,16 @@ const RepairDetail = () => {
     return statusMap[status] || status;
   };
 
+  // ✅ Fixed: เพิ่มการรองรับสถานะ assigned ที่ขาดหายไป + รองรับ empty string
   const getStatusBadge = (status) => {
+    // ✅ จัดการกรณี status เป็นค่าว่างหรือ null/undefined
+    if (!status || status === '') {
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+    
     const badgeMap = {
       'pending': 'bg-orange-100 text-orange-800 border-orange-200',
-      'assigned': 'bg-purple-100 text-purple-800 border-purple-200',
+      'assigned': 'bg-purple-100 text-purple-800 border-purple-200', // ✅ เพิ่มสีสำหรับ assigned
       'in_progress': 'bg-blue-100 text-blue-800 border-blue-200',
       'completed': 'bg-green-100 text-green-800 border-green-200',
       'cancelled': 'bg-red-100 text-red-800 border-red-200'
@@ -560,7 +580,7 @@ const RepairDetail = () => {
             <div className="space-y-3 sm:space-y-4">
               {repair.assigned_name ? (
                 <div className="flex items-start">
-                  <User className={`${isMobile ? 'w-4 h-4' : 'w-5 h-5'} text-gray-400 mr-3 mt-1 flex-shrink-0`} />
+                  <UserCheck className={`${isMobile ? 'w-4 h-4' : 'w-5 h-5'} text-purple-400 mr-3 mt-1 flex-shrink-0`} />
                   <div className="flex-1 min-w-0">
                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600`}>ผู้รับผิดชอบ</p>
                     <p className={`${isMobile ? 'text-sm' : 'text-base'} font-medium text-gray-900 truncate`}>
@@ -717,25 +737,42 @@ const RepairDetail = () => {
           )}
         </div>
 
-        {/* Status History - Mobile Optimized */}
+        {/* Status History - Mobile Optimized + Fixed Empty Status + Debug Info */}
         {repair.status_history && repair.status_history.length > 0 && (
           <div className={`bg-white shadow-sm border border-gray-100 ${isMobile ? 'rounded-lg p-4' : 'rounded-xl p-6'}`}>
             <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900 ${isMobile ? 'mb-4' : 'mb-6'} flex items-center`}>
               <Clock className={`${isMobile ? 'w-4 h-4' : 'w-5 h-5'} text-gray-400 mr-2`} />
               ประวัติการอัพเดทสถานะ
             </h3>
+            
             <div className={`space-y-${isMobile ? '3' : '4'}`}>
-              {repair.status_history.map((history, index) => (
+              {repair.status_history
+                .filter(history => {
+                  // ✅ พิจารณาแสดง history แม้ new_status จะว่าง แต่มี old_status
+                  const hasValidNewStatus = history.new_status && history.new_status !== '';
+                  const hasValidOldStatus = history.old_status && history.old_status !== '';
+                  return hasValidNewStatus || hasValidOldStatus;
+                })
+                .map((history, index) => (
                 <div key={history.id || index} className={`flex items-start space-x-3 ${isMobile ? 'pb-3' : 'pb-4'} border-b border-gray-100 last:border-b-0`}>
                   <div className="flex-shrink-0 mt-1">
-                    {getStatusIcon(history.new_status)}
+                    {/* ✅ ใช้ old_status เมื่อ new_status ว่าง */}
+                    {getStatusIcon(history.new_status || history.old_status)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className={`flex flex-wrap items-center gap-2 ${isMobile ? 'mb-2' : 'mb-2'}`}>
-                      <span className={`px-2 py-1 ${isMobile ? 'text-xs' : 'text-xs'} font-medium rounded-full border ${getStatusBadge(history.new_status)}`}>
-                        {getStatusText(history.new_status)}
-                      </span>
-                      {history.old_status && (
+                      {/* ✅ แสดงสถานะปัจจุบันหรือสถานะเก่าถ้า new_status ว่าง */}
+                      {history.new_status && history.new_status !== '' ? (
+                        <span className={`px-2 py-1 ${isMobile ? 'text-xs' : 'text-xs'} font-medium rounded-full border ${getStatusBadge(history.new_status)}`}>
+                          {getStatusText(history.new_status)}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 text-xs font-medium rounded-full border bg-red-100 text-red-800 border-red-200">
+                          ข้อมูลสถานะไม่สมบูรณ์
+                        </span>
+                      )}
+                      
+                      {history.old_status && history.old_status !== '' && (
                         <>
                           <span className="text-gray-400 text-xs">←</span>
                           <span className={`px-2 py-1 ${isMobile ? 'text-xs' : 'text-xs'} font-medium rounded-full border ${getStatusBadge(history.old_status)}`}>
@@ -750,6 +787,7 @@ const RepairDetail = () => {
                     <div className={`${isMobile ? 'text-xs' : 'text-xs'} text-gray-500 mb-2`}>
                       {formatThaiDate(history.created_at)}
                     </div>
+                    
                     {history.notes && (
                       <div className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-700 bg-gray-50 rounded-md ${isMobile ? 'p-2' : 'p-3'}`}>
                         <strong>หมายเหตุ:</strong> {history.notes}
@@ -759,6 +797,14 @@ const RepairDetail = () => {
                 </div>
               ))}
             </div>
+            
+            {/* ✅ แสดงข้อความเมื่อไม่มีประวัติที่แสดงได้ */}
+            {repair.status_history.filter(h => (h.new_status && h.new_status !== '') || (h.old_status && h.old_status !== '')).length === 0 && (
+              <div className="text-center py-8">
+                <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">ยังไม่มีประวัติการอัพเดทสถานะ</p>
+              </div>
+            )}
           </div>
         )}
 
