@@ -8,10 +8,14 @@ const lineMessaging = require('../utils/lineMessaging');
 
 const router = express.Router();
 
-// ตั้งค่า multer สำหรับอัพโหลดรูปภาพหลายไฟล์
+// ✅ แก้ไข multer storage เพื่อแยกโฟลเดอร์ตามประเภทรูปภาพ
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = 'uploads/repair-images';
+        // แยกโฟลเดอร์ตามประเภทของรูปภาพ
+        const uploadDir = file.fieldname === 'completion_images' 
+            ? 'uploads/completion-images' 
+            : 'uploads/repair-images';
+        
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
         }
@@ -19,7 +23,8 @@ const storage = multer.diskStorage({
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'repair-' + uniqueSuffix + path.extname(file.originalname));
+        const prefix = file.fieldname === 'completion_images' ? 'completion-' : 'repair-';
+        cb(null, prefix + uniqueSuffix + path.extname(file.originalname));
     }
 });
 
@@ -27,7 +32,7 @@ const upload = multer({
     storage: storage,
     limits: {
         fileSize: 5 * 1024 * 1024, // 5MB per file
-        files: 50 // Maximum 50 files at once (adjust as needed)
+        files: 50 // Maximum 50 files at once
     },
     fileFilter: (req, file, cb) => {
         const allowedTypes = /jpeg|jpg|png|gif|webp/;
@@ -42,7 +47,59 @@ const upload = multer({
     }
 });
 
-// ดึงหมวดหมู่ทั้งหมด (สำหรับผู้ใช้ทั่วไป)
+// ✅ ฟังก์ชันแปลง path ให้ใช้ forward slash
+const normalizePath = (filePath) => {
+    if (!filePath) return filePath;
+    return filePath.replace(/\\/g, '/');
+};
+
+// ✅ ฟังก์ชันตรวจสอบและสร้างไฟล์ placeholder
+const ensurePlaceholderExists = () => {
+    const placeholderPath = 'uploads/placeholder-image.png';
+    if (!fs.existsSync(placeholderPath)) {
+        // สร้างไฟล์ placeholder แบบ base64
+        const placeholderBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+        try {
+            const uploadDir = 'uploads';
+            if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            }
+            fs.writeFileSync(placeholderPath, Buffer.from(placeholderBase64, 'base64'));
+        } catch (error) {
+            console.error('Cannot create placeholder image:', error);
+        }
+    }
+};
+
+// สร้างตาราง completion_images ถ้าไม่มี
+const createCompletionImagesTable = async () => {
+    try {
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS completion_images (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                repair_request_id INT NOT NULL,
+                file_path VARCHAR(500) NOT NULL,
+                file_name VARCHAR(255) NOT NULL,
+                file_size INT DEFAULT 0,
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (repair_request_id) REFERENCES repair_requests(id) ON DELETE CASCADE,
+                INDEX idx_repair_request (repair_request_id)
+            )
+        `);
+        console.log('✅ Completion images table checked/created');
+        
+        // สร้าง placeholder image
+        ensurePlaceholderExists();
+        
+    } catch (error) {
+        console.error('⚠️ Error creating completion_images table:', error);
+    }
+};
+
+// เรียกใช้เมื่อ start server
+createCompletionImagesTable();
+
+// ดึงหมวดหมู่ทั้งหมด
 router.get('/categories', authenticateToken, async (req, res) => {
     try {
         const [categories] = await db.execute(`
@@ -59,7 +116,7 @@ router.get('/categories', authenticateToken, async (req, res) => {
     }
 });
 
-// ดึงรายชื่อช่างเทคนิค (สำหรับทุก role)
+// ดึงรายชื่อช่างเทคนิค
 router.get('/technicians', authenticateToken, async (req, res) => {
     try {
         const [technicians] = await db.execute(`
@@ -69,7 +126,7 @@ router.get('/technicians', authenticateToken, async (req, res) => {
             ORDER BY full_name ASC
         `);
 
-        console.log('👷 Technicians fetched for all roles:', technicians.length);
+        console.log('👷 Technicians fetched:', technicians.length);
         res.json(technicians);
     } catch (error) {
         console.error('Get technicians error:', error);
@@ -77,16 +134,14 @@ router.get('/technicians', authenticateToken, async (req, res) => {
     }
 });
 
-// ดึงรายการแจ้งซ่อม - แสดงทั้งหมดให้ทุก role ดู
-// ดึงรายการแจ้งซ่อม - แสดงทั้งหมดให้ทุก role ดู (แก้ไขเพื่อดึงข้อมูลทั้งหมด)
+// ดึงรายการแจ้งซ่อม
 router.get('/', authenticateToken, async (req, res) => {
     try {
         const { status, category, priority, page, limit } = req.query;
 
-        // ถ้าไม่ระบุ page และ limit ให้ดึงข้อมูลทั้งหมด
         const shouldPaginate = page || limit;
         const actualPage = parseInt(page) || 1;
-        const actualLimit = parseInt(limit) || (shouldPaginate ? 10 : 999999); // ใช้เลขใหญ่มากเพื่อดึงทั้งหมด
+        const actualLimit = parseInt(limit) || (shouldPaginate ? 10 : 999999);
         const offset = (actualPage - 1) * actualLimit;
 
         let query = `
@@ -105,7 +160,6 @@ router.get('/', authenticateToken, async (req, res) => {
 
         const params = [];
 
-        // กรองตามเงื่อนไขอื่นๆ
         if (status) {
             query += ' AND r.status = ?';
             params.push(status);
@@ -123,7 +177,6 @@ router.get('/', authenticateToken, async (req, res) => {
 
         query += ' ORDER BY r.created_at DESC';
 
-        // เพิ่ม LIMIT เฉพาะเมื่อต้องการ pagination
         if (shouldPaginate) {
             query += ' LIMIT ? OFFSET ?';
             params.push(actualLimit, offset);
@@ -139,10 +192,34 @@ router.get('/', authenticateToken, async (req, res) => {
                 WHERE repair_request_id = ? 
                 ORDER BY id ASC
             `, [repair.id]);
-            repair.images = images;
+            
+            // ✅ แปลง path ให้ใช้ forward slash
+            repair.images = images.map(img => ({
+                ...img,
+                file_path: normalizePath(img.file_path)
+            }));
+
+            // ✅ ดึงรูปภาพเสร็จสิ้น
+            const [completionImages] = await db.execute(`
+                SELECT id, file_path, file_name, file_size 
+                FROM completion_images 
+                WHERE repair_request_id = ? 
+                ORDER BY id ASC
+            `, [repair.id]);
+            
+            // ✅ แปลง path ให้ใช้ forward slash
+            repair.completion_images = completionImages.map(img => ({
+                ...img,
+                file_path: normalizePath(img.file_path)
+            }));
+
+            // ✅ แปลง legacy image path
+            if (repair.image_path) {
+                repair.image_path = normalizePath(repair.image_path);
+            }
         }
 
-        // นับจำนวนทั้งหมด (สำหรับ pagination)
+        // นับจำนวนทั้งหมด
         let countQuery = `
             SELECT COUNT(*) as total
             FROM repair_requests r
@@ -170,13 +247,11 @@ router.get('/', authenticateToken, async (req, res) => {
 
         console.log(`📋 Repairs fetched for ${req.user.role}:`, repairs.length, 'total:', total);
 
-        // ส่งข้อมูลกลับ
         const response = {
             repairs,
             total: total
         };
 
-        // เพิ่ม pagination info เฉพาะเมื่อมีการใช้ pagination
         if (shouldPaginate) {
             response.pagination = {
                 page: actualPage,
@@ -216,14 +291,38 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
         const repair = repairs[0];
 
-        // ดึงรูปภาพทั้งหมด
+        // ✅ แปลง legacy image path
+        if (repair.image_path) {
+            repair.image_path = normalizePath(repair.image_path);
+        }
+
+        // ดึงรูปภาพทั่วไป
         const [images] = await db.execute(`
             SELECT id, file_path, file_name, file_size, uploaded_at
             FROM repair_images 
             WHERE repair_request_id = ? 
             ORDER BY id ASC
         `, [req.params.id]);
-        repair.images = images;
+        
+        // ✅ แปลง path ให้ใช้ forward slash
+        repair.images = images.map(img => ({
+            ...img,
+            file_path: normalizePath(img.file_path)
+        }));
+
+        // ✅ ดึงรูปภาพเสร็จสิ้น
+        const [completionImages] = await db.execute(`
+            SELECT id, file_path, file_name, file_size, uploaded_at
+            FROM completion_images 
+            WHERE repair_request_id = ? 
+            ORDER BY id ASC
+        `, [req.params.id]);
+        
+        // ✅ แปลง path ให้ใช้ forward slash
+        repair.completion_images = completionImages.map(img => ({
+            ...img,
+            file_path: normalizePath(img.file_path)
+        }));
 
         // ดึงประวัติการอัพเดทสถานะ
         const [history] = await db.execute(`
@@ -246,7 +345,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
 });
 
-// สร้างแจ้งซ่อมใหม่ (รองรับหลายรูปภาพ)
+// สร้างแจ้งซ่อมใหม่
 router.post('/', authenticateToken, upload.array('images', 50), async (req, res) => {
     const connection = await db.getConnection();
 
@@ -264,12 +363,10 @@ router.post('/', authenticateToken, upload.array('images', 50), async (req, res)
             imageCount: images.length
         });
 
-        // Validation
         if (!title || !description || !category_id || !location || !priority) {
             throw new Error('กรุณากรอกข้อมูลให้ครบถ้วน');
         }
 
-        // สร้าง repair request
         const [result] = await connection.execute(`
             INSERT INTO repair_requests 
             (title, description, category_id, location, priority, requester_id)
@@ -279,14 +376,15 @@ router.post('/', authenticateToken, upload.array('images', 50), async (req, res)
         const repairId = result.insertId;
         console.log('✅ Repair request created with ID:', repairId);
 
-        // บันทึกรูปภาพทั้งหมด
         if (images.length > 0) {
             const imageInsertPromises = images.map(image => {
+                // ✅ แปลง path ก่อนบันทึกลงฐานข้อมูล
+                const normalizedPath = normalizePath(image.path);
                 return connection.execute(`
                     INSERT INTO repair_images 
                     (repair_request_id, file_path, file_name, file_size)
                     VALUES (?, ?, ?, ?)
-                `, [repairId, image.path, image.originalname, image.size]);
+                `, [repairId, normalizedPath, image.originalname, image.size]);
             });
 
             await Promise.all(imageInsertPromises);
@@ -295,7 +393,7 @@ router.post('/', authenticateToken, upload.array('images', 50), async (req, res)
 
         await connection.commit();
 
-        // ส่งการแจ้งเตือนไปยัง admin และ technician ผ่าน LINE Messaging API
+        // ส่งการแจ้งเตือน LINE
         try {
             const [adminUsers] = await db.execute(`
                 SELECT line_user_id 
@@ -317,12 +415,9 @@ router.post('/', authenticateToken, upload.array('images', 50), async (req, res)
                     imageCount: images.length
                 });
                 console.log('📱 LINE notifications sent successfully');
-            } else {
-                console.log('📱 No LINE user IDs found for notifications');
             }
         } catch (notifyError) {
             console.error('LINE notify error:', notifyError);
-            // ไม่ให้ notify error ทำให้การสร้าง repair request ล้มเหลว
         }
 
         res.status(201).json({
@@ -340,7 +435,6 @@ router.post('/', authenticateToken, upload.array('images', 50), async (req, res)
     } catch (error) {
         await connection.rollback();
 
-        // ลบไฟล์ที่อัพโหลดแล้วถ้าเกิดข้อผิดพลาด
         if (req.files && req.files.length > 0) {
             req.files.forEach(file => {
                 if (fs.existsSync(file.path)) {
@@ -356,7 +450,7 @@ router.post('/', authenticateToken, upload.array('images', 50), async (req, res)
     }
 });
 
-// อัพเดทข้อมูลการแจ้งซ่อม (รองรับหลายรูปภาพ)
+// อัพเดทข้อมูลการแจ้งซ่อม
 router.put('/:id', authenticateToken, upload.array('images', 50), async (req, res) => {
     const connection = await db.getConnection();
 
@@ -374,7 +468,6 @@ router.put('/:id', authenticateToken, upload.array('images', 50), async (req, re
             keepImagesData: keep_images
         });
 
-        // ตรวจสอบข้อมูลเดิม
         const [oldRepairs] = await connection.execute(
             'SELECT * FROM repair_requests WHERE id = ?',
             [repairId]
@@ -386,17 +479,14 @@ router.put('/:id', authenticateToken, upload.array('images', 50), async (req, re
 
         const oldRepair = oldRepairs[0];
 
-        // ตรวจสอบสิทธิ์การแก้ไข
         if (req.user.role === 'user' && oldRepair.requester_id !== req.user.id) {
             throw new Error('ไม่มีสิทธิ์แก้ไขข้อมูลนี้');
         }
 
-        // ถ้าเป็น user ตรวจสอบว่าสถานะยังแก้ไขได้หรือไม่
         if (req.user.role === 'user' && oldRepair.status !== 'pending') {
             throw new Error('ไม่สามารถแก้ไขได้เนื่องจากสถานะไม่ใช่ "รอดำเนินการ"');
         }
 
-        // อัพเดทข้อมูลพื้นฐาน
         await connection.execute(`
             UPDATE repair_requests 
             SET title = ?, description = ?, category_id = ?, location = ?, priority = ?
@@ -406,30 +496,20 @@ router.put('/:id', authenticateToken, upload.array('images', 50), async (req, re
         console.log('✅ Basic repair data updated');
 
         // จัดการรูปภาพ
-        console.log('🖼️ Managing images...');
-
-        // ดึงรูปภาพทั้งหมดที่มีอยู่ในระบบ
         const [existingNewImages] = await connection.execute(`
             SELECT id, file_path, file_name FROM repair_images WHERE repair_request_id = ?
         `, [repairId]);
 
-        console.log('📋 Existing new images in DB:', existingNewImages.length);
-
-        // ดึงข้อมูล legacy image (ถ้ามี)
         const legacyImagePath = oldRepair.image_path;
-        console.log('📋 Legacy image path:', legacyImagePath);
 
-        // Parse ข้อมูลรูปภาพที่ต้องการเก็บ
         let keepImageData = [];
         try {
             keepImageData = keep_images ? JSON.parse(keep_images) : [];
-            console.log('📋 Keep images data:', keepImageData);
         } catch (parseError) {
             console.log('⚠️ Error parsing keep_images, treating as empty array');
             keepImageData = [];
         }
 
-        // สร้าง Set ของรูปภาพที่ต้องการเก็บ
         const keepNewImageIds = new Set();
         let keepLegacyImage = false;
 
@@ -437,88 +517,57 @@ router.put('/:id', authenticateToken, upload.array('images', 50), async (req, re
             if (typeof item === 'object') {
                 if (item.type === 'legacy') {
                     keepLegacyImage = true;
-                    console.log('🔄 Will keep legacy image:', item.path);
                 } else if (item.type === 'new' && item.id) {
                     keepNewImageIds.add(parseInt(item.id));
-                    console.log('🔄 Will keep new image ID:', item.id);
                 }
             } else {
-                // backward compatibility - ถ้าเป็นแค่ ID หรือ path
                 if (item === 'legacy' || item === legacyImagePath) {
                     keepLegacyImage = true;
                 } else if (!isNaN(parseInt(item))) {
                     keepNewImageIds.add(parseInt(item));
-                } else if (item === legacyImagePath) {
-                    keepLegacyImage = true;
                 }
             }
         });
 
-        console.log('📊 Image management plan:', {
-            keepLegacyImage,
-            keepNewImageIds: Array.from(keepNewImageIds),
-            newImagesCount: newImages.length
-        });
-
-        // ลบรูปภาพใหม่ที่ไม่ต้องการเก็บ
+        // ลบรูปภาพที่ไม่ต้องการเก็บ
         for (const existingImage of existingNewImages) {
             if (!keepNewImageIds.has(existingImage.id)) {
-                console.log('🗑️ Removing image:', existingImage.file_path);
-
-                // ลบไฟล์
-                if (fs.existsSync(existingImage.file_path)) {
-                    fs.unlinkSync(existingImage.file_path);
-                    console.log('✅ File deleted:', existingImage.file_path);
+                // ✅ แปลง path ก่อนตรวจสอบไฟล์
+                const normalizedPath = normalizePath(existingImage.file_path);
+                if (fs.existsSync(normalizedPath)) {
+                    fs.unlinkSync(normalizedPath);
                 }
 
-                // ลบจากฐานข้อมูล
                 await connection.execute(`
                     DELETE FROM repair_images WHERE id = ?
                 `, [existingImage.id]);
-                console.log('✅ DB record deleted for image ID:', existingImage.id);
-            } else {
-                console.log('✅ Keeping existing image:', existingImage.file_path);
             }
         }
 
         // จัดการ legacy image
         if (legacyImagePath) {
-            if (keepLegacyImage) {
-                console.log('✅ Keeping legacy image:', legacyImagePath);
-                // ไม่ต้องทำอะไร - เก็บไว้ใน image_path เดิม
-            } else {
-                console.log('🗑️ Removing legacy image:', legacyImagePath);
-
-                // ลบไฟล์ legacy
-                if (fs.existsSync(legacyImagePath)) {
-                    fs.unlinkSync(legacyImagePath);
-                    console.log('✅ Legacy file deleted');
+            if (!keepLegacyImage) {
+                const normalizedLegacyPath = normalizePath(legacyImagePath);
+                if (fs.existsSync(normalizedLegacyPath)) {
+                    fs.unlinkSync(normalizedLegacyPath);
                 }
 
-                // ล้าง image_path ใน repair_requests
                 await connection.execute(`
                     UPDATE repair_requests SET image_path = NULL WHERE id = ?
                 `, [repairId]);
-                console.log('✅ Legacy image_path cleared from DB');
             }
         }
 
-        // เพิ่มรูปภาพใหม่ที่อัปโหลด
+        // เพิ่มรูปภาพใหม่
         if (newImages.length > 0) {
-            console.log('📤 Adding new images:', newImages.length);
-
-            const imageInsertPromises = newImages.map((image, index) => {
-                console.log(`📤 Adding new image ${index + 1}:`, {
-                    path: image.path,
-                    name: image.originalname,
-                    size: image.size
-                });
-
+            const imageInsertPromises = newImages.map((image) => {
+                // ✅ แปลง path ก่อนบันทึกลงฐานข้อมูล
+                const normalizedPath = normalizePath(image.path);
                 return connection.execute(`
                     INSERT INTO repair_images 
                     (repair_request_id, file_path, file_name, file_size)
                     VALUES (?, ?, ?, ?)
-                `, [repairId, image.path, image.originalname, image.size]);
+                `, [repairId, normalizedPath, image.originalname, image.size]);
             });
 
             await Promise.all(imageInsertPromises);
@@ -541,12 +590,10 @@ router.put('/:id', authenticateToken, upload.array('images', 50), async (req, re
         await connection.rollback();
         console.error('❌ Update repair error:', error);
 
-        // ลบไฟล์ใหม่ที่อัพโหลดแล้วถ้าเกิดข้อผิดพลาด
         if (req.files && req.files.length > 0) {
             req.files.forEach(file => {
                 if (fs.existsSync(file.path)) {
                     fs.unlinkSync(file.path);
-                    console.log('🧹 Cleaned up uploaded file:', file.path);
                 }
             });
         }
@@ -560,7 +607,351 @@ router.put('/:id', authenticateToken, upload.array('images', 50), async (req, re
     }
 });
 
-// เพิ่ม endpoint สำหรับ debug ข้อมูลรูปภาพ (สำหรับ development)
+// ✅ อัพเดทสถานะการซ่อม (แก้ไขเพื่อรองรับรูปภาพเสร็จสิ้น)
+router.put('/:id/status', authenticateToken, requireRole(['admin', 'technician']), upload.array('completion_images', 50), async (req, res) => {
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+        console.log('🔄 Status update started for repair ID:', req.params.id);
+
+        // ✅ Debug incoming data
+        console.log('📝 Request body:', req.body);
+        console.log('📝 Request files:', req.files ? req.files.length : 0);
+        console.log('📝 Headers:', req.headers['content-type']);
+
+        const { status, completion_details, assigned_to, keep_completion_images } = req.body;
+        const repairId = req.params.id;
+        const newCompletionImages = req.files || [];
+
+        console.log('📝 Parsed data:', { 
+            status, 
+            assigned_to, 
+            completion_details: completion_details ? 'provided' : 'empty',
+            newCompletionImagesCount: newCompletionImages.length,
+            keepCompletionImages: keep_completion_images
+        });
+
+        // ✅ Validate required fields - ยืดหยุ่นกับค่าว่าง
+        if (!status || status.trim() === '') {
+            throw new Error('กรุณาระบุสถานะ');
+        }
+
+        // ตรวจสอบข้อมูลเดิม
+        const [oldRepairs] = await connection.execute(
+            'SELECT * FROM repair_requests WHERE id = ?',
+            [repairId]
+        );
+
+        if (oldRepairs.length === 0) {
+            throw new Error('ไม่พบข้อมูลการแจ้งซ่อม');
+        }
+
+        const oldRepair = oldRepairs[0];
+        console.log('📋 Old repair status:', oldRepair.status, '-> New status:', status);
+
+        // ตรวจสอบว่าต้องใส่รายละเอียดเมื่อเสร็จสิ้น
+        if (status === 'completed' && (!completion_details || completion_details.trim() === '')) {
+            throw new Error('กรุณาใส่รายละเอียดการซ่อมเมื่อเปลี่ยนสถานะเป็นเสร็จสิ้น');
+        }
+
+        // ✅ Build update query dynamically
+        const updateFields = ['status = ?'];
+        const updateParams = [status];
+
+        if (assigned_to !== undefined && assigned_to !== null && assigned_to !== '') {
+            updateFields.push('assigned_to = ?');
+            updateParams.push(assigned_to);
+        }
+
+        if (completion_details !== undefined && completion_details !== null && completion_details.trim() !== '') {
+            updateFields.push('completion_details = ?');
+            updateParams.push(completion_details.trim());
+        }
+
+        if (status === 'completed') {
+            updateFields.push('completed_at = NOW()');
+        }
+
+        updateParams.push(repairId);
+
+        console.log('🔄 Updating repair with fields:', updateFields.join(', '));
+        
+        await connection.execute(
+            `UPDATE repair_requests SET ${updateFields.join(', ')} WHERE id = ?`,
+            updateParams
+        );
+
+        console.log('✅ Basic repair status updated');
+
+        // ✅ จัดการรูปภาพเสร็จสิ้น (เฉพาะเมื่อสถานะเป็น completed)
+        let keepCompletionImageIds = new Set(); // ✅ ย้ายออกมานอก if block
+        
+        if (status === 'completed') {
+            console.log('🖼️ Managing completion images...');
+
+            // ดึงรูปภาพเสร็จสิ้นที่มีอยู่
+            const [existingCompletionImages] = await connection.execute(`
+                SELECT id, file_path, file_name FROM completion_images WHERE repair_request_id = ?
+            `, [repairId]);
+
+            console.log('📋 Existing completion images:', existingCompletionImages.length);
+
+            // Parse ข้อมูลรูปภาพที่ต้องการเก็บ
+            let keepCompletionImageData = [];
+            try {
+                if (keep_completion_images && keep_completion_images.trim() !== '') {
+                    keepCompletionImageData = JSON.parse(keep_completion_images);
+                }
+                console.log('📋 Keep completion images data:', keepCompletionImageData);
+            } catch (parseError) {
+                console.log('⚠️ Error parsing keep_completion_images:', parseError.message);
+                keepCompletionImageData = [];
+            }
+
+            // สร้าง Set ของรูปภาพเสร็จสิ้นที่ต้องการเก็บ
+            keepCompletionImageData.forEach(item => {
+                if (typeof item === 'object' && item.id) {
+                    keepCompletionImageIds.add(parseInt(item.id));
+                    console.log('🔄 Will keep completion image ID:', item.id);
+                } else if (!isNaN(parseInt(item))) {
+                    keepCompletionImageIds.add(parseInt(item));
+                }
+            });
+
+            console.log('📊 Completion image management plan:', {
+                keepCompletionImageIds: Array.from(keepCompletionImageIds),
+                newCompletionImagesCount: newCompletionImages.length
+            });
+
+            // ลบรูปภาพเสร็จสิ้นที่ไม่ต้องการเก็บ
+            for (const existingImage of existingCompletionImages) {
+                if (!keepCompletionImageIds.has(existingImage.id)) {
+                    console.log('🗑️ Removing completion image:', existingImage.file_path);
+
+                    // ✅ แปลง path ก่อนลบไฟล์
+                    const normalizedPath = normalizePath(existingImage.file_path);
+                    if (normalizedPath && fs.existsSync(normalizedPath)) {
+                        try {
+                            fs.unlinkSync(normalizedPath);
+                            console.log('✅ Completion file deleted:', normalizedPath);
+                        } catch (deleteError) {
+                            console.warn('⚠️ Could not delete file:', normalizedPath, deleteError.message);
+                        }
+                    }
+
+                    // ลบจากฐานข้อมูล
+                    await connection.execute(`
+                        DELETE FROM completion_images WHERE id = ?
+                    `, [existingImage.id]);
+                    console.log('✅ Completion image DB record deleted for ID:', existingImage.id);
+                } else {
+                    console.log('✅ Keeping existing completion image:', existingImage.file_path);
+                }
+            }
+
+            // เพิ่มรูปภาพเสร็จสิ้นใหม่ที่อัปโหลด
+            if (newCompletionImages.length > 0) {
+                console.log('📤 Adding new completion images:', newCompletionImages.length);
+
+                const completionImageInsertPromises = newCompletionImages.map((image, index) => {
+                    // ✅ แปลง path ก่อนบันทึกลงฐานข้อมูล
+                    const normalizedPath = normalizePath(image.path);
+                    console.log(`📤 Adding new completion image ${index + 1}:`, {
+                        path: normalizedPath,
+                        name: image.originalname,
+                        size: image.size
+                    });
+
+                    return connection.execute(`
+                        INSERT INTO completion_images 
+                        (repair_request_id, file_path, file_name, file_size)
+                        VALUES (?, ?, ?, ?)
+                    `, [repairId, normalizedPath, image.originalname, image.size]);
+                });
+
+                await Promise.all(completionImageInsertPromises);
+                console.log('✅ All new completion images added to DB');
+            }
+        }
+
+        // บันทึกประวัติการเปลี่ยนสถานะ
+        await connection.execute(`
+            INSERT INTO status_history (repair_request_id, old_status, new_status, notes, updated_by)
+            VALUES (?, ?, ?, ?, ?)
+        `, [repairId, oldRepair.status, status, completion_details || null, req.user.id]);
+
+        await connection.commit();
+        console.log('✅ Transaction committed successfully');
+
+        // ส่งการแจ้งเตือนการอัพเดทสถานะ (ปิดไว้ก่อนเพราะไม่มี LINE integration)
+        try {
+            // ✅ ตรวจสอบว่ามี column line_user_id หรือไม่
+            const [tableColumns] = await db.execute(`
+                SHOW COLUMNS FROM users LIKE 'line_user_id'
+            `);
+
+            if (tableColumns.length > 0) {
+                const [notifyUsers] = await db.execute(`
+                    SELECT DISTINCT u.line_user_id
+                    FROM users u
+                    WHERE (u.id = ? OR u.role IN ('admin', 'technician'))
+                    AND u.line_user_id IS NOT NULL 
+                    AND u.line_user_id != ''
+                `, [oldRepair.requester_id]);
+
+                if (notifyUsers.length > 0) {
+                    const userIds = notifyUsers.map(user => user.line_user_id);
+                    console.log('📱 Sending LINE status update to user IDs:', userIds);
+
+                    // ✅ ตรวจสอบว่ามี lineMessaging หรือไม่
+                    if (lineMessaging && typeof lineMessaging.notifyStatusUpdate === 'function') {
+                        await lineMessaging.notifyStatusUpdate(userIds, {
+                            title: oldRepair.title,
+                            completion_details
+                        }, oldRepair.status, status, req.user.full_name);
+                        console.log('📱 LINE status update notifications sent successfully');
+                    } else {
+                        console.log('📱 LINE messaging service not available');
+                    }
+                }
+            } else {
+                console.log('📱 LINE integration not configured (no line_user_id column)');
+            }
+        } catch (notifyError) {
+            console.error('LINE notify error:', notifyError.message);
+        }
+
+        console.log('✅ Repair status updated successfully');
+        
+        res.json({ 
+            message: 'อัพเดทสถานะสำเร็จ',
+            details: {
+                status,
+                newCompletionImagesAdded: newCompletionImages.length,
+                completionImagesKept: Array.from(keepCompletionImageIds).length
+            }
+        });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('❌ Update status error:', error);
+
+        // ลบไฟล์ใหม่ที่อัพโหลดแล้วถ้าเกิดข้อผิดพลาด
+        if (req.files && req.files.length > 0) {
+            req.files.forEach(file => {
+                const normalizedPath = normalizePath(file.path);
+                if (normalizedPath && fs.existsSync(normalizedPath)) {
+                    try {
+                        fs.unlinkSync(normalizedPath);
+                        console.log('🧹 Cleaned up uploaded completion file:', normalizedPath);
+                    } catch (cleanupError) {
+                        console.warn('⚠️ Could not clean up file:', normalizedPath);
+                    }
+                }
+            });
+        }
+
+        // ✅ More specific error messages
+        let errorMessage = error.message || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ';
+        if (error.code === 'ER_NO_SUCH_TABLE') {
+            errorMessage = 'ตารางในฐานข้อมูลไม่สมบูรณ์';
+        } else if (error.code === 'ER_DUP_ENTRY') {
+            errorMessage = 'ข้อมูลซ้ำกัน';
+        } else if (error.code === 'ER_BAD_FIELD_ERROR') {
+            errorMessage = 'ข้อมูลไม่ถูกต้อง';
+        }
+
+        res.status(500).json({ 
+            message: 'เกิดข้อผิดพลาด: ' + errorMessage,
+            details: process.env.NODE_ENV === 'development' ? {
+                error: error.message,
+                stack: error.stack,
+                body: req.body,
+                files: req.files ? req.files.length : 0
+            } : undefined
+        });
+    } finally {
+        connection.release();
+    }
+});
+
+// ลบการแจ้งซ่อม (เฉพาะ admin)
+router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        // ดึงข้อมูลรูปภาพทั้งหมด
+        const [images] = await connection.execute(
+            'SELECT file_path FROM repair_images WHERE repair_request_id = ?',
+            [req.params.id]
+        );
+
+        // ✅ ดึงข้อมูลรูปภาพเสร็จสิ้น
+        const [completionImages] = await connection.execute(
+            'SELECT file_path FROM completion_images WHERE repair_request_id = ?',
+            [req.params.id]
+        );
+
+        // ดึงข้อมูล repair request
+        const [repairs] = await connection.execute(
+            'SELECT image_path FROM repair_requests WHERE id = ?',
+            [req.params.id]
+        );
+
+        if (repairs.length === 0) {
+            throw new Error('ไม่พบข้อมูลการแจ้งซ่อม');
+        }
+
+        // ลบไฟล์รูปภาพทั้งหมด
+        images.forEach(image => {
+            if (image.file_path) {
+                const normalizedPath = normalizePath(image.file_path);
+                if (fs.existsSync(normalizedPath)) {
+                    fs.unlinkSync(normalizedPath);
+                }
+            }
+        });
+
+        // ✅ ลบไฟล์รูปภาพเสร็จสิ้น
+        completionImages.forEach(image => {
+            if (image.file_path) {
+                const normalizedPath = normalizePath(image.file_path);
+                if (fs.existsSync(normalizedPath)) {
+                    fs.unlinkSync(normalizedPath);
+                }
+            }
+        });
+
+        // ลบรูปเก่า (ถ้ามี)
+        if (repairs[0].image_path) {
+            const normalizedLegacyPath = normalizePath(repairs[0].image_path);
+            if (fs.existsSync(normalizedLegacyPath)) {
+                fs.unlinkSync(normalizedLegacyPath);
+            }
+        }
+
+        // ลบข้อมูลในฐานข้อมูล
+        await connection.execute('DELETE FROM completion_images WHERE repair_request_id = ?', [req.params.id]);
+        await connection.execute('DELETE FROM repair_images WHERE repair_request_id = ?', [req.params.id]);
+        await connection.execute('DELETE FROM status_history WHERE repair_request_id = ?', [req.params.id]);
+        await connection.execute('DELETE FROM repair_requests WHERE id = ?', [req.params.id]);
+
+        await connection.commit();
+
+        res.json({ message: 'ลบข้อมูลสำเร็จ' });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Delete repair error:', error);
+        res.status(500).json({ message: 'เกิดข้อผิดพลาด: ' + error.message });
+    } finally {
+        connection.release();
+    }
+});
+
+// ✅ Debug endpoint สำหรับตรวจสอบรูปภาพ
 router.get('/:id/images-debug', authenticateToken, async (req, res) => {
     try {
         const repairId = req.params.id;
@@ -582,30 +973,58 @@ router.get('/:id/images-debug', authenticateToken, async (req, res) => {
             ORDER BY id ASC
         `, [repairId]);
 
+        // ✅ ดึงรูปภาพเสร็จสิ้น
+        const [completionImages] = await db.execute(`
+            SELECT id, file_path, file_name, file_size, uploaded_at
+            FROM completion_images 
+            WHERE repair_request_id = ? 
+            ORDER BY id ASC
+        `, [repairId]);
+
         // ตรวจสอบไฟล์ที่มีจริง
         const imageStatus = {
             legacy: null,
-            new_images: []
+            new_images: [],
+            completion_images: []
         };
 
         // ตรวจสอบ legacy image
         if (repairs[0].image_path) {
+            const normalizedLegacyPath = normalizePath(repairs[0].image_path);
             imageStatus.legacy = {
                 path: repairs[0].image_path,
-                exists: fs.existsSync(repairs[0].image_path),
-                url: `http://localhost:5000/${repairs[0].image_path}`
+                normalized_path: normalizedLegacyPath,
+                exists: fs.existsSync(normalizedLegacyPath),
+                url: `http://localhost:5000/${normalizedLegacyPath}`
             };
         }
 
         // ตรวจสอบ new images
         for (const img of newImages) {
+            const normalizedPath = normalizePath(img.file_path);
             imageStatus.new_images.push({
                 id: img.id,
                 path: img.file_path,
+                normalized_path: normalizedPath,
                 name: img.file_name,
                 size: img.file_size,
-                exists: fs.existsSync(img.file_path),
-                url: `http://localhost:5000/${img.file_path}`,
+                exists: fs.existsSync(normalizedPath),
+                url: `http://localhost:5000/${normalizedPath}`,
+                uploaded_at: img.uploaded_at
+            });
+        }
+
+        // ✅ ตรวจสอบ completion images
+        for (const img of completionImages) {
+            const normalizedPath = normalizePath(img.file_path);
+            imageStatus.completion_images.push({
+                id: img.id,
+                path: img.file_path,
+                normalized_path: normalizedPath,
+                name: img.file_name,
+                size: img.file_size,
+                exists: fs.existsSync(normalizedPath),
+                url: `http://localhost:5000/${normalizedPath}`,
                 uploaded_at: img.uploaded_at
             });
         }
@@ -616,156 +1035,14 @@ router.get('/:id/images-debug', authenticateToken, async (req, res) => {
             summary: {
                 has_legacy: !!repairs[0].image_path,
                 new_images_count: newImages.length,
-                total_images: (repairs[0].image_path ? 1 : 0) + newImages.length
+                completion_images_count: completionImages.length,
+                total_images: (repairs[0].image_path ? 1 : 0) + newImages.length + completionImages.length
             }
         });
 
     } catch (error) {
         console.error('Images debug error:', error);
         res.status(500).json({ message: 'เกิดข้อผิดพลาด' });
-    }
-});
-// อัพเดทสถานะการซ่อม
-router.put('/:id/status', authenticateToken, requireRole(['admin', 'technician']), async (req, res) => {
-    try {
-        const { status, completion_details, assigned_to } = req.body;
-        const repairId = req.params.id;
-
-        console.log('🔄 Updating repair status:', { repairId, status, assigned_to });
-
-        // ตรวจสอบข้อมูลเดิม
-        const [oldRepairs] = await db.execute(
-            'SELECT * FROM repair_requests WHERE id = ?',
-            [repairId]
-        );
-
-        if (oldRepairs.length === 0) {
-            return res.status(404).json({ message: 'ไม่พบข้อมูลการแจ้งซ่อม' });
-        }
-
-        const oldRepair = oldRepairs[0];
-
-        // ตรวจสอบว่าต้องใส่รายละเอียดเมื่อเสร็จสิ้น
-        if (status === 'completed' && !completion_details) {
-            return res.status(400).json({
-                message: 'กรุณาใส่รายละเอียดการซ่อมเมื่อเปลี่ยนสถานะเป็นเสร็จสิ้น'
-            });
-        }
-
-        // อัพเดทข้อมูล
-        const updateFields = ['status = ?'];
-        const updateParams = [status];
-
-        if (assigned_to) {
-            updateFields.push('assigned_to = ?');
-            updateParams.push(assigned_to);
-        }
-
-        if (completion_details) {
-            updateFields.push('completion_details = ?');
-            updateParams.push(completion_details);
-        }
-
-        if (status === 'completed') {
-            updateFields.push('completed_at = NOW()');
-        }
-
-        updateParams.push(repairId);
-
-        await db.execute(
-            `UPDATE repair_requests SET ${updateFields.join(', ')} WHERE id = ?`,
-            updateParams
-        );
-
-        // บันทึกประวัติการเปลี่ยนสถานะ
-        await db.execute(`
-            INSERT INTO status_history (repair_request_id, old_status, new_status, notes, updated_by)
-            VALUES (?, ?, ?, ?, ?)
-        `, [repairId, oldRepair.status, status, completion_details, req.user.id]);
-
-        // ส่งการแจ้งเตือนการอัพเดทสถานะ
-        try {
-            const [notifyUsers] = await db.execute(`
-                SELECT DISTINCT u.line_user_id
-                FROM users u
-                WHERE (u.id = ? OR u.role IN ('admin', 'technician'))
-                AND u.line_user_id IS NOT NULL 
-                AND u.line_user_id != ''
-            `, [oldRepair.requester_id]);
-
-            if (notifyUsers.length > 0) {
-                const userIds = notifyUsers.map(user => user.line_user_id);
-                console.log('📱 Sending LINE status update to user IDs:', userIds);
-
-                await lineMessaging.notifyStatusUpdate(userIds, {
-                    title: oldRepair.title,
-                    completion_details
-                }, oldRepair.status, status, req.user.full_name);
-                console.log('📱 LINE status update notifications sent successfully');
-            } else {
-                console.log('📱 No LINE user IDs found for status update notifications');
-            }
-        } catch (notifyError) {
-            console.error('LINE notify error:', notifyError);
-        }
-
-        console.log('✅ Repair status updated successfully');
-        res.json({ message: 'อัพเดทสถานะสำเร็จ' });
-    } catch (error) {
-        console.error('Update status error:', error);
-        res.status(500).json({ message: 'เกิดข้อผิดพลาด: ' + error.message });
-    }
-});
-
-// ลบการแจ้งซ่อม (เฉพาะ admin)
-router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
-    const connection = await db.getConnection();
-
-    try {
-        await connection.beginTransaction();
-
-        // ดึงข้อมูลรูปภาพทั้งหมด
-        const [images] = await connection.execute(
-            'SELECT file_path FROM repair_images WHERE repair_request_id = ?',
-            [req.params.id]
-        );
-
-        // ดึงข้อมูล repair request
-        const [repairs] = await connection.execute(
-            'SELECT image_path FROM repair_requests WHERE id = ?',
-            [req.params.id]
-        );
-
-        if (repairs.length === 0) {
-            throw new Error('ไม่พบข้อมูลการแจ้งซ่อม');
-        }
-
-        // ลบไฟล์รูปภาพทั้งหมด
-        images.forEach(image => {
-            if (image.file_path && fs.existsSync(image.file_path)) {
-                fs.unlinkSync(image.file_path);
-            }
-        });
-
-        // ลบรูปเก่า (ถ้ามี)
-        if (repairs[0].image_path && fs.existsSync(repairs[0].image_path)) {
-            fs.unlinkSync(repairs[0].image_path);
-        }
-
-        // ลบข้อมูลในฐานข้อมูล
-        await connection.execute('DELETE FROM repair_images WHERE repair_request_id = ?', [req.params.id]);
-        await connection.execute('DELETE FROM status_history WHERE repair_request_id = ?', [req.params.id]);
-        await connection.execute('DELETE FROM repair_requests WHERE id = ?', [req.params.id]);
-
-        await connection.commit();
-
-        res.json({ message: 'ลบข้อมูลสำเร็จ' });
-    } catch (error) {
-        await connection.rollback();
-        console.error('Delete repair error:', error);
-        res.status(500).json({ message: 'เกิดข้อผิดพลาด: ' + error.message });
-    } finally {
-        connection.release();
     }
 });
 

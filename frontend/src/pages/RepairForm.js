@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout/Layout';
-import { ArrowLeft, Upload, X, Image as ImageIcon, Save, Plus, Camera } from 'lucide-react';
+import { ArrowLeft, Upload, X, Image as ImageIcon, Save, Plus, Camera, MapPin, Building } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
@@ -13,6 +13,7 @@ const RepairForm = () => {
     const [selectedImages, setSelectedImages] = useState([]);
     const [imagePreviews, setImagePreviews] = useState([]);
     const [isMobile, setIsMobile] = useState(false);
+    const [locationType, setLocationType] = useState(''); // 'indoor' หรือ 'outdoor'
 
     // Detect mobile device
     useEffect(() => {
@@ -53,6 +54,7 @@ const RepairForm = () => {
         building: '',
         floor: '',
         room: '',
+        outdoor_location: '', // สำหรับสถานที่ภายนอกอาคาร
         priority: 'medium'
     });
 
@@ -65,11 +67,12 @@ const RepairForm = () => {
             primary: "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-lg hover:shadow-xl",
             secondary: "bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 border border-gray-300",
             danger: "bg-red-600 hover:bg-red-700 active:bg-red-800 text-white shadow-lg hover:shadow-xl",
-            ghost: "hover:bg-gray-100 active:bg-gray-200 text-gray-700"
+            ghost: "hover:bg-gray-100 active:bg-gray-200 text-gray-700",
+            outline: "border-2 border-blue-600 text-blue-600 hover:bg-blue-50 active:bg-blue-100"
         };
-        
+
         const touchSizeClasses = isMobile ? "min-h-[48px] min-w-[48px] px-4 py-3" : "px-4 py-2";
-        
+
         return (
             <button
                 type={type}
@@ -84,7 +87,7 @@ const RepairForm = () => {
                     ${isMobile ? 'text-base font-medium' : 'text-sm'}
                     rounded-lg flex items-center justify-center
                 `}
-                style={{ 
+                style={{
                     WebkitTapHighlightColor: 'transparent',
                     touchAction: 'manipulation'
                 }}
@@ -146,7 +149,7 @@ const RepairForm = () => {
             }
         } catch (error) {
             console.error('Error fetching categories:', error);
-            
+
             // แสดง error message ที่เฉพาะเจาะจง
             if (error.response?.status === 401) {
                 toast.error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
@@ -156,7 +159,7 @@ const RepairForm = () => {
             } else {
                 toast.error('เกิดข้อผิดพลาดในการโหลดหมวดหมู่');
             }
-            
+
             // ใช้ default categories เมื่อเกิด error
             const defaultCategories = [
                 { id: 1, name: 'คอมพิวเตอร์' },
@@ -193,16 +196,27 @@ const RepairForm = () => {
             newErrors.category_id = 'กรุณาเลือกหมวดหมู่';
         }
 
-        if (!formData.building) {
-            newErrors.building = 'กรุณาเลือกอาคาร';
+        if (!locationType) {
+            newErrors.location = 'กรุณาเลือกประเภทสถานที่';
         }
 
-        if (!formData.floor) {
-            newErrors.floor = 'กรุณาเลือกชั้น';
-        }
-
-        if (!formData.room.trim()) {
-            newErrors.room = 'กรุณากรอกห้อง';
+        // Validate location based on type
+        if (locationType === 'indoor') {
+            if (!formData.building) {
+                newErrors.building = 'กรุณาเลือกอาคาร';
+            }
+            if (!formData.floor) {
+                newErrors.floor = 'กรุณาเลือกชั้น';
+            }
+            if (!formData.room.trim()) {
+                newErrors.room = 'กรุณากรอกห้อง';
+            }
+        } else if (locationType === 'outdoor') {
+            if (!formData.outdoor_location.trim()) {
+                newErrors.outdoor_location = 'กรุณากรอกรายละเอียดสถานที่';
+            } else if (formData.outdoor_location.trim().length < 5) {
+                newErrors.outdoor_location = 'รายละเอียดสถานที่ต้องมีความยาวอย่างน้อย 5 ตัวอักษร';
+            }
         }
 
         if (!formData.priority) {
@@ -215,7 +229,7 @@ const RepairForm = () => {
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        
+
         // ถ้าเปลี่ยนอาคาร ให้รีเซ็ตชั้น
         if (name === 'building') {
             setFormData({
@@ -239,10 +253,30 @@ const RepairForm = () => {
         }
     };
 
+    const handleLocationTypeChange = (type) => {
+        setLocationType(type);
+        // รีเซ็ตข้อมูลสถานที่เมื่อเปลี่ยนประเภท
+        setFormData({
+            ...formData,
+            building: '',
+            floor: '',
+            room: '',
+            outdoor_location: ''
+        });
+        // ลบ error ที่เกี่ยวข้องกับสถานที่
+        const newErrors = { ...errors };
+        delete newErrors.building;
+        delete newErrors.floor;
+        delete newErrors.room;
+        delete newErrors.outdoor_location;
+        delete newErrors.location;
+        setErrors(newErrors);
+    };
+
     // ปรับปรุงฟังก์ชัน handleImageChange
     const handleImageChange = (event) => {
         const files = Array.from(event.target.files);
-        
+
         if (files.length === 0) return;
 
         console.log('Selected files:', files);
@@ -251,7 +285,7 @@ const RepairForm = () => {
         const newPreviews = []; // ย้ายมาไว้ด้านบน
         const maxFileSize = 5 * 1024 * 1024; // 5MB
         const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-        
+
         let processedCount = 0;
         const totalFiles = files.length;
 
@@ -263,13 +297,13 @@ const RepairForm = () => {
                     console.log('Updated selectedImages:', updatedImages);
                     return updatedImages;
                 });
-                
+
                 setImagePreviews(prev => {
                     const updatedPreviews = [...prev, ...newPreviews];
                     console.log('Updated imagePreviews:', updatedPreviews);
                     return updatedPreviews;
                 });
-                
+
                 toast.success(`เพิ่มรูปภาพสำเร็จ ${validFiles.length} ไฟล์`);
             }
         };
@@ -310,12 +344,12 @@ const RepairForm = () => {
                     preview: e.target.result,
                     name: file.name
                 };
-                
+
                 newPreviews.push(previewData);
                 console.log(`Preview created for ${file.name}:`, previewData);
 
                 processedCount++;
-                
+
                 // เมื่อประมวลผลครบทุกไฟล์
                 if (processedCount === totalFiles) {
                     console.log('All files processed, updating state...');
@@ -342,19 +376,19 @@ const RepairForm = () => {
     // ปรับปรุงฟังก์ชัน removeImage
     const removeImage = (index) => {
         console.log('Removing image at index:', index);
-        
+
         setSelectedImages(prev => {
             const newImages = prev.filter((_, i) => i !== index);
             console.log('Updated selectedImages after removal:', newImages);
             return newImages;
         });
-        
+
         setImagePreviews(prev => {
             const newPreviews = prev.filter((_, i) => i !== index);
             console.log('Updated imagePreviews after removal:', newPreviews);
             return newPreviews;
         });
-        
+
         toast.info('ลบรูปภาพแล้ว');
     };
 
@@ -381,9 +415,15 @@ const RepairForm = () => {
             submitData.append('title', formData.title.trim());
             submitData.append('description', formData.description.trim());
             submitData.append('category_id', formData.category_id);
-            
-            // รวมสถานที่เป็น location string
-            const location = `${buildings[formData.building].name} ชั้น ${formData.floor} ห้อง ${formData.room.trim()}`;
+
+            // สร้าง location string ตามประเภทสถานที่
+            let location = '';
+            if (locationType === 'indoor') {
+                location = `${buildings[formData.building].name} ชั้น ${formData.floor} ห้อง ${formData.room.trim()}`;
+            } else if (locationType === 'outdoor') {
+                location = `ภายนอกอาคาร: ${formData.outdoor_location.trim()}`;
+            }
+
             submitData.append('location', location);
             submitData.append('priority', formData.priority);
 
@@ -402,7 +442,7 @@ const RepairForm = () => {
             });
 
             console.log('Repair created successfully:', response.data);
-            
+
             toast.success('แจ้งซ่อมสำเร็จ! 🎉', {
                 duration: 3000
             });
@@ -417,7 +457,7 @@ const RepairForm = () => {
             }
         } catch (error) {
             console.error('Submit error:', error);
-            
+
             // แสดง error message ที่เฉพาะเจาะจง
             if (error.response?.status === 401) {
                 toast.error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
@@ -447,7 +487,7 @@ const RepairForm = () => {
     // สร้างรายการชั้นตามอาคารที่เลือก
     const getFloorsForBuilding = (buildingId) => {
         if (!buildingId || !buildings[buildingId]) return [];
-        
+
         const floors = [];
         for (let i = 1; i <= buildings[buildingId].floors; i++) {
             floors.push(i);
@@ -459,7 +499,7 @@ const RepairForm = () => {
         <button
             onClick={() => navigate(-1)}
             className="p-3 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors"
-            style={{ 
+            style={{
                 WebkitTapHighlightColor: 'transparent',
                 touchAction: 'manipulation',
                 minHeight: '48px',
@@ -494,7 +534,7 @@ const RepairForm = () => {
                         <p className={`text-gray-600 mt-1 ${isMobile ? 'text-sm' : 'text-base'}`}>
                             {isMobile ? 'กรอกข้อมูลให้ครบถ้วน' : 'กรุณากรอกข้อมูลให้ครบถ้วนเพื่อให้เราสามารถดำเนินการได้อย่างรวดเร็ว'}
                         </p>
-                        
+
                         {/* Debug info - แสดงจำนวนรูปภาพที่เลือก */}
                         {selectedImages.length > 0 && (
                             <div className="mt-2 text-sm text-blue-600">
@@ -514,9 +554,8 @@ const RepairForm = () => {
                                 name="title"
                                 value={formData.title}
                                 onChange={handleInputChange}
-                                className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                    errors.title ? 'border-red-300' : 'border-gray-300'
-                                } ${isMobile ? 'text-base' : 'text-sm'}`}
+                                className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.title ? 'border-red-300' : 'border-gray-300'
+                                    } ${isMobile ? 'text-base' : 'text-sm'}`}
                                 placeholder="เช่น ไฟดับในห้องประชุม, คอมพิวเตอร์เปิดไม่ติด"
                                 maxLength={200}
                                 style={{ fontSize: isMobile ? '16px' : '14px' }} // Prevent zoom on iOS
@@ -540,9 +579,8 @@ const RepairForm = () => {
                                     name="category_id"
                                     value={formData.category_id}
                                     onChange={handleInputChange}
-                                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                        errors.category_id ? 'border-red-300' : 'border-gray-300'
-                                    } ${isMobile ? 'text-base' : 'text-sm'}`}
+                                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.category_id ? 'border-red-300' : 'border-gray-300'
+                                        } ${isMobile ? 'text-base' : 'text-sm'}`}
                                     style={{ fontSize: isMobile ? '16px' : '14px' }}
                                 >
                                     <option value="">เลือกหมวดหมู่</option>
@@ -566,9 +604,8 @@ const RepairForm = () => {
                                     name="priority"
                                     value={formData.priority}
                                     onChange={handleInputChange}
-                                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                        errors.priority ? 'border-red-300' : 'border-gray-300'
-                                    } ${isMobile ? 'text-base' : 'text-sm'}`}
+                                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.priority ? 'border-red-300' : 'border-gray-300'
+                                        } ${isMobile ? 'text-base' : 'text-sm'}`}
                                     style={{ fontSize: isMobile ? '16px' : '14px' }}
                                 >
                                     <option value="low">ต่ำ - ไม่เร่งด่วน</option>
@@ -582,97 +619,167 @@ const RepairForm = () => {
                             </div>
                         </div>
 
-                        {/* Location Selection */}
-                        <div className="space-y-4">
-                            <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700`}>
-                                สถานที่ <span className="text-red-500">*</span>
+                        {/* Location Type Selection */}
+                        <div>
+                            <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-3`}>
+                                ประเภทสถานที่ <span className="text-red-500">*</span>
                             </label>
-                            
-                            <div className={`grid grid-cols-1 ${isMobile ? 'gap-3' : 'md:grid-cols-3 gap-4'}`}>
-                                {/* Building */}
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                                        อาคาร
-                                    </label>
-                                    <select
-                                        name="building"
-                                        value={formData.building}
-                                        onChange={handleInputChange}
-                                        className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                            errors.building ? 'border-red-300' : 'border-gray-300'
-                                        } ${isMobile ? 'text-base' : 'text-sm'}`}
-                                        style={{ fontSize: isMobile ? '16px' : '14px' }}
-                                    >
-                                        <option value="">เลือกอาคาร</option>
-                                        {Object.entries(buildings).map(([id, building]) => (
-                                            <option key={id} value={id}>
-                                                {building.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {errors.building && (
-                                        <p className="mt-1 text-xs text-red-600">{errors.building}</p>
-                                    )}
-                                </div>
-
-                                {/* Floor */}
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                                        ชั้น
-                                    </label>
-                                    <select
-                                        name="floor"
-                                        value={formData.floor}
-                                        onChange={handleInputChange}
-                                        disabled={!formData.building}
-                                        className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${
-                                            errors.floor ? 'border-red-300' : 'border-gray-300'
-                                        } ${isMobile ? 'text-base' : 'text-sm'}`}
-                                        style={{ fontSize: isMobile ? '16px' : '14px' }}
-                                    >
-                                        <option value="">เลือกชั้น</option>
-                                        {getFloorsForBuilding(formData.building).map(floor => (
-                                            <option key={floor} value={floor}>
-                                                ชั้น {floor}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {errors.floor && (
-                                        <p className="mt-1 text-xs text-red-600">{errors.floor}</p>
-                                    )}
-                                </div>
-
-                                {/* Room */}
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                                        ห้อง
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="room"
-                                        value={formData.room}
-                                        onChange={handleInputChange}
-                                        className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                            errors.room ? 'border-red-300' : 'border-gray-300'
-                                        } ${isMobile ? 'text-base' : 'text-sm'}`}
-                                        placeholder="เช่น 101, ห้องประชุม"
-                                        style={{ fontSize: isMobile ? '16px' : '14px' }}
-                                    />
-                                    {errors.room && (
-                                        <p className="mt-1 text-xs text-red-600">{errors.room}</p>
-                                    )}
-                                </div>
+                            <div className={`grid grid-cols-2 gap-3`}>
+                                <TouchButton
+                                    onClick={() => handleLocationTypeChange('indoor')}
+                                    variant={locationType === 'indoor' ? 'primary' : 'outline'}
+                                    className={`${isMobile ? 'p-4' : 'p-3'} flex-col`}
+                                >
+                                    <Building className={`${isMobile ? 'w-6 h-6' : 'w-5 h-5'} mb-2`} />
+                                    <span className={`${isMobile ? 'text-sm' : 'text-xs'} font-medium`}>ภายในอาคาร</span>
+                                </TouchButton>
+                                <TouchButton
+                                    onClick={() => handleLocationTypeChange('outdoor')}
+                                    variant={locationType === 'outdoor' ? 'primary' : 'outline'}
+                                    className={`${isMobile ? 'p-4' : 'p-3'} flex-col`}
+                                >
+                                    <MapPin className={`${isMobile ? 'w-6 h-6' : 'w-5 h-5'} mb-2`} />
+                                    <span className={`${isMobile ? 'text-sm' : 'text-xs'} font-medium`}>ภายนอกอาคาร</span>
+                                </TouchButton>
                             </div>
-
-                            {/* Location Preview */}
-                            {formData.building && formData.floor && formData.room && (
-                                <div className={`mt-2 p-3 bg-blue-50 rounded-lg`}>
-                                    <p className={`${isMobile ? 'text-sm' : 'text-sm'} text-blue-800`}>
-                                        📍 <strong>สถานที่:</strong> {buildings[formData.building].name} ชั้น {formData.floor} ห้อง {formData.room}
-                                    </p>
-                                </div>
+                            {errors.location && (
+                                <p className="mt-2 text-sm text-red-600">{errors.location}</p>
                             )}
                         </div>
+
+                        {/* Location Details based on type */}
+                        {locationType && (
+                            <div className="space-y-4">
+                                {locationType === 'indoor' ? (
+                                    // Indoor Location Form
+                                    <>
+                                        <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700`}>
+                                            รายละเอียดสถานที่ <span className="text-red-500">*</span>
+                                        </label>
+
+                                        <div className={`grid grid-cols-1 ${isMobile ? 'gap-3' : 'md:grid-cols-3 gap-4'}`}>
+                                            {/* Building */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                    อาคาร
+                                                </label>
+                                                <select
+                                                    name="building"
+                                                    value={formData.building}
+                                                    onChange={handleInputChange}
+                                                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.building ? 'border-red-300' : 'border-gray-300'
+                                                        } ${isMobile ? 'text-base' : 'text-sm'}`}
+                                                    style={{ fontSize: isMobile ? '16px' : '14px' }}
+                                                >
+                                                    <option value="">เลือกอาคาร</option>
+                                                    {Object.entries(buildings).map(([id, building]) => (
+                                                        <option key={id} value={id}>
+                                                            {building.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                {errors.building && (
+                                                    <p className="mt-1 text-xs text-red-600">{errors.building}</p>
+                                                )}
+                                            </div>
+
+                                            {/* Floor */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                    ชั้น
+                                                </label>
+                                                <select
+                                                    name="floor"
+                                                    value={formData.floor}
+                                                    onChange={handleInputChange}
+                                                    disabled={!formData.building}
+                                                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${errors.floor ? 'border-red-300' : 'border-gray-300'
+                                                        } ${isMobile ? 'text-base' : 'text-sm'}`}
+                                                    style={{ fontSize: isMobile ? '16px' : '14px' }}
+                                                >
+                                                    <option value="">เลือกชั้น</option>
+                                                    {getFloorsForBuilding(formData.building).map(floor => (
+                                                        <option key={floor} value={floor}>
+                                                            ชั้น {floor}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                {errors.floor && (
+                                                    <p className="mt-1 text-xs text-red-600">{errors.floor}</p>
+                                                )}
+                                            </div>
+
+                                            {/* Room */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                    ห้อง
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    name="room"
+                                                    value={formData.room}
+                                                    onChange={handleInputChange}
+                                                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.room ? 'border-red-300' : 'border-gray-300'
+                                                        } ${isMobile ? 'text-base' : 'text-sm'}`}
+                                                    placeholder="เช่น 101, ห้องประชุม"
+                                                    style={{ fontSize: isMobile ? '16px' : '14px' }}
+                                                />
+                                                {errors.room && (
+                                                    <p className="mt-1 text-xs text-red-600">{errors.room}</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Location Preview */}
+                                        {formData.building && formData.floor && formData.room && (
+                                            <div className={`mt-2 p-3 bg-blue-50 rounded-lg`}>
+                                                <p className={`${isMobile ? 'text-sm' : 'text-sm'} text-blue-800`}>
+                                                    📍 <strong>สถานที่:</strong> {buildings[formData.building].name} ชั้น {formData.floor} ห้อง {formData.room}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    // Outdoor Location Form
+                                    <>
+                                        <div>
+                                            <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
+                                                รายละเอียดสถานที่ <span className="text-red-500">*</span>
+                                            </label>
+                                            <textarea
+                                                name="outdoor_location"
+                                                value={formData.outdoor_location}
+                                                onChange={handleInputChange}
+                                                rows={isMobile ? 2 : 3}
+                                                className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.outdoor_location ? 'border-red-300' : 'border-gray-300'
+                                                    } ${isMobile ? 'text-base' : 'text-sm'}`}
+                                                placeholder={isMobile ?
+                                                    "เช่น ลานจอดรถด้านหน้า, สวนหลังอาคาร 3..." :
+                                                    "อธิบายสถานที่ภายนอกอาคารอย่างละเอียด เช่น ลานจอดรถด้านหน้า, สวนหลังอาคาร 3, บริเวณป้ายรถเมล์..."
+                                                }
+                                                maxLength={300}
+                                                style={{ fontSize: isMobile ? '16px' : '14px', resize: isMobile ? 'vertical' : 'both' }}
+                                            />
+                                            {errors.outdoor_location && (
+                                                <p className="mt-1 text-sm text-red-600">{errors.outdoor_location}</p>
+                                            )}
+                                            <p className="mt-1 text-xs text-gray-500">
+                                                {formData.outdoor_location.length}/300 ตัวอักษร
+                                            </p>
+                                        </div>
+
+                                        {/* Outdoor Location Preview */}
+                                        {formData.outdoor_location.trim() && (
+                                            <div className={`mt-2 p-3 bg-green-50 rounded-lg`}>
+                                                <p className={`${isMobile ? 'text-sm' : 'text-sm'} text-green-800`}>
+                                                    🌿 <strong>สถานที่:</strong> ภายนอกอาคาร - {formData.outdoor_location.trim()}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
 
                         {/* Description */}
                         <div>
@@ -684,11 +791,10 @@ const RepairForm = () => {
                                 value={formData.description}
                                 onChange={handleInputChange}
                                 rows={isMobile ? 3 : 4}
-                                className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                    errors.description ? 'border-red-300' : 'border-gray-300'
-                                } ${isMobile ? 'text-base' : 'text-sm'}`}
-                                placeholder={isMobile ? 
-                                    "อธิบายปัญหาที่พบอย่างละเอียด..." : 
+                                className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.description ? 'border-red-300' : 'border-gray-300'
+                                    } ${isMobile ? 'text-base' : 'text-sm'}`}
+                                placeholder={isMobile ?
+                                    "อธิบายปัญหาที่พบอย่างละเอียด..." :
                                     "อธิบายปัญหาที่พบอย่างละเอียด เช่น อาการที่เกิดขึ้น, เวลาที่เกิดปัญหา, ได้ลองแก้ไขอย่างไรบ้าง..."
                                 }
                                 maxLength={1000}
@@ -702,13 +808,13 @@ const RepairForm = () => {
                             </p>
                         </div>
 
-                        {/* ปรับปรุงส่วน Image Upload */}
+                        {/* Image Upload */}
                         <div>
                             <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
                                 รูปภาพประกอบ {isMobile ? '' : '(ไม่จำกัดจำนวน)'}
                             </label>
 
-                            {/* Upload Area - ปรับปรุงให้ทำงานได้ดีขึ้น */}
+                            {/* Upload Area */}
                             <div className={`border-2 border-dashed border-gray-300 rounded-lg ${isMobile ? 'p-4' : 'p-6'} hover:border-gray-400 transition-colors`}>
                                 <div className="text-center">
                                     {isMobile ? (
@@ -716,8 +822,7 @@ const RepairForm = () => {
                                     ) : (
                                         <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                                     )}
-                                    
-                                    {/* ปรับปรุง input file */}
+
                                     <input
                                         id="images"
                                         type="file"
@@ -727,16 +832,16 @@ const RepairForm = () => {
                                         onChange={handleImageChange}
                                         className="hidden"
                                     />
-                                    
+
                                     <label htmlFor="images" className="cursor-pointer block">
                                         <div className={`inline-flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-lg hover:shadow-xl rounded-lg transition-all duration-200 active:scale-95 ${isMobile ? 'w-full text-base font-medium' : 'text-sm'}`}>
                                             <Upload className={`${isMobile ? 'w-4 h-4' : 'w-4 h-4'} mr-2`} />
                                             {isMobile ? 'ถ่ายรูป/เลือกรูป' : 'เพิ่มรูปภาพ'}
                                         </div>
                                     </label>
-                                    
+
                                     <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 mt-2`}>
-                                        {isMobile ? 
+                                        {isMobile ?
                                             'JPEG, PNG, GIF ขนาดไม่เกิน 5MB' :
                                             'รองรับไฟล์ JPEG, PNG, GIF, WebP ขนาดไม่เกิน 5MB ต่อไฟล์'
                                         }
@@ -749,14 +854,14 @@ const RepairForm = () => {
                                 </div>
                             </div>
 
-                            {/* Image Previews - ปรับปรุงการแสดงผล */}
+                            {/* Image Previews */}
                             {imagePreviews.length > 0 && (
                                 <div className={`mt-4`}>
                                     <div className="flex items-center justify-between mb-3">
                                         <p className={`${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700`}>
                                             รูปภาพที่เลือก ({imagePreviews.length} รูป)
                                         </p>
-                                        
+
                                         {/* ปุ่มเพิ่มรูปเพิ่มเติม */}
                                         <input
                                             id="images-add"
@@ -774,7 +879,7 @@ const RepairForm = () => {
                                             </span>
                                         </label>
                                     </div>
-                                    
+
                                     <div className={`grid ${isMobile ? 'grid-cols-2 gap-3' : 'grid-cols-2 md:grid-cols-3 gap-4'}`}>
                                         {imagePreviews.map((preview, index) => (
                                             <div key={preview.id} className="relative group">
@@ -783,7 +888,7 @@ const RepairForm = () => {
                                                     alt={`Preview ${index + 1}`}
                                                     className={`w-full ${isMobile ? 'h-24' : 'h-32'} object-cover rounded-lg border border-gray-300`}
                                                 />
-                                                
+
                                                 {/* ปุ่มลบ */}
                                                 <button
                                                     type="button"
@@ -792,12 +897,12 @@ const RepairForm = () => {
                                                 >
                                                     <X className={`${isMobile ? 'w-3 h-3' : 'w-3 h-3'}`} />
                                                 </button>
-                                                
+
                                                 {/* ชื่อไฟล์/หมายเลข */}
                                                 <div className={`absolute bottom-1 left-1 bg-black bg-opacity-70 text-white px-1 py-0.5 rounded text-xs max-w-[80%] truncate`}>
                                                     {isMobile ? `${index + 1}` : preview.name}
                                                 </div>
-                                                
+
                                                 {/* หมายเลขลำดับ */}
                                                 <div className={`absolute top-1 left-1 bg-blue-600 text-white px-1 py-0.5 rounded text-xs`}>
                                                     {index + 1}

@@ -10,8 +10,15 @@ import {
   X,
   Image as ImageIcon,
   Settings,
-  Plus
+  Plus,
+  Building,
+  MapPin,
+  Camera,
+  CheckCircle
 } from 'lucide-react';
+
+// ✅ กำหนด API base URL
+const API_BASE_URL = 'http://localhost:5000';
 
 const RepairEdit = () => {
   const { id } = useParams();
@@ -24,8 +31,33 @@ const RepairEdit = () => {
   const [selectedImages, setSelectedImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
   const [currentImages, setCurrentImages] = useState([]);
+  
+  // ✅ เพิ่ม state สำหรับรูปภาพเสร็จสิ้น
+  const [completionImages, setCompletionImages] = useState([]);
+  const [completionImagePreviews, setCompletionImagePreviews] = useState([]);
+  const [currentCompletionImages, setCurrentCompletionImages] = useState([]);
+  
+  const [locationType, setLocationType] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
 
-  // ข้อมูลอาคารและชั้น
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent;
+      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+      const isSmallScreen = window.innerWidth < 768;
+      setIsMobile(isMobileDevice || isSmallScreen);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    window.addEventListener('orientationchange', checkMobile);
+
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('orientationchange', checkMobile);
+    };
+  }, []);
+
   const buildings = {
     1: { name: 'อาคาร 1', floors: 2 },
     2: { name: 'อาคาร 2', floors: 4 },
@@ -45,11 +77,65 @@ const RepairEdit = () => {
     building: '',
     floor: '',
     room: '',
+    outdoor_location: '',
     priority: 'medium',
     status: 'pending',
     assigned_to: '',
     completion_details: ''
   });
+
+  const [errors, setErrors] = useState({});
+
+  // ✅ สร้าง placeholder image แบบ inline SVG
+  const createPlaceholderImage = () => {
+    return `data:image/svg+xml;base64,${btoa(`
+      <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="#f3f4f6"/>
+        <g>
+          <rect x="35" y="25" width="30" height="20" fill="#d1d5db" rx="2"/>
+          <circle cx="42" cy="32" r="3" fill="#9ca3af"/>
+          <polygon points="60,40 50,30 55,25 65,35 75,25 85,35 85,45 35,45" fill="#d1d5db"/>
+        </g>
+        <text x="50" y="65" font-family="Arial, sans-serif" font-size="8" fill="#6b7280" text-anchor="middle">ไม่พบรูปภาพ</text>
+      </svg>
+    `)}`;
+  };
+
+  const TouchButton = ({ onClick, children, className = "", disabled = false, variant = "primary", type = "button" }) => {
+    const baseClasses = "relative overflow-hidden transition-all duration-200 active:scale-95 select-none";
+    const variantClasses = {
+      primary: "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-lg hover:shadow-xl",
+      secondary: "bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 border border-gray-300",
+      danger: "bg-red-600 hover:bg-red-700 active:bg-red-800 text-white shadow-lg hover:shadow-xl",
+      ghost: "hover:bg-gray-100 active:bg-gray-200 text-gray-700",
+      outline: "border-2 border-blue-600 text-blue-600 hover:bg-blue-50 active:bg-blue-100"
+    };
+    
+    const touchSizeClasses = isMobile ? "min-h-[48px] min-w-[48px] px-4 py-3" : "px-4 py-2";
+    
+    return (
+      <button
+        type={type}
+        onClick={onClick}
+        disabled={disabled}
+        className={`
+          ${baseClasses}
+          ${variantClasses[variant]}
+          ${touchSizeClasses}
+          ${className}
+          ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+          ${isMobile ? 'text-base font-medium' : 'text-sm'}
+          rounded-lg flex items-center justify-center
+        `}
+        style={{ 
+          WebkitTapHighlightColor: 'transparent',
+          touchAction: 'manipulation'
+        }}
+      >
+        {children}
+      </button>
+    );
+  };
 
   useEffect(() => {
     fetchRepairData();
@@ -62,53 +148,52 @@ const RepairEdit = () => {
   const fetchRepairData = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`/api/repairs/${id}`, {
+      const response = await axios.get(`${API_BASE_URL}/api/repairs/${id}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
       
       const repair = response.data;
-      console.log('📋 Repair data loaded:', {
-        id: repair.id,
-        title: repair.title,
-        hasImages: repair.images?.length > 0,
-        hasLegacyImage: !!repair.image_path,
-        imagesCount: repair.images?.length || 0
-      });
       
-      // ตรวจสอบสิทธิ์การแก้ไข
       if (!canEdit(repair)) {
         toast.error('คุณไม่มีสิทธิ์แก้ไขรายการนี้');
         navigate(`/repairs/${id}`);
         return;
       }
 
-      // แยก location กลับเป็น building, floor, room
       let building = '';
       let floor = '';
       let room = '';
+      let outdoor_location = '';
+      let detectedLocationType = '';
       
       if (repair.location) {
-        // พยายามแยกข้อมูลจาก location string
-        for (const [buildingId, buildingData] of Object.entries(buildings)) {
-          if (repair.location.includes(buildingData.name)) {
-            building = buildingId;
-            break;
+        if (repair.location.includes('ภายนอกอาคาร:')) {
+          detectedLocationType = 'outdoor';
+          outdoor_location = repair.location.replace('ภายนอกอาคาร:', '').trim();
+        } else {
+          detectedLocationType = 'indoor';
+          for (const [buildingId, buildingData] of Object.entries(buildings)) {
+            if (repair.location.includes(buildingData.name)) {
+              building = buildingId;
+              break;
+            }
           }
-        }
-        
-        const floorMatch = repair.location.match(/ชั้น\s*(\d+)/);
-        if (floorMatch) {
-          floor = floorMatch[1];
-        }
-        
-        const roomMatch = repair.location.match(/ห้อง\s*(.+?)(?:\s|$)/);
-        if (roomMatch) {
-          room = roomMatch[1].trim();
+          
+          const floorMatch = repair.location.match(/ชั้น\s*(\d+)/);
+          if (floorMatch) {
+            floor = floorMatch[1];
+          }
+          
+          const roomMatch = repair.location.match(/ห้อง\s*(.+?)(?:\s|$)/);
+          if (roomMatch) {
+            room = roomMatch[1].trim();
+          }
         }
       }
 
+      setLocationType(detectedLocationType);
       setFormData({
         title: repair.title || '',
         description: repair.description || '',
@@ -116,50 +201,61 @@ const RepairEdit = () => {
         building: building,
         floor: floor,
         room: room,
+        outdoor_location: outdoor_location,
         priority: repair.priority || 'medium',
         status: repair.status || 'pending',
         assigned_to: repair.assigned_to || '',
         completion_details: repair.completion_details || ''
       });
 
-      // โหลดรูปภาพที่มีอยู่
+      // ✅ จัดการรูปภาพทั่วไป
       const processedImages = [];
-      
-      // 1. โหลดรูปภาพจากตาราง repair_images (ใหม่)
       if (repair.images && Array.isArray(repair.images) && repair.images.length > 0) {
         repair.images.forEach((img, index) => {
           processedImages.push({
             id: img.id,
             file_path: img.file_path,
             name: img.file_name || `รูปภาพ ${index + 1}`,
-            url: `http://localhost:5000/${img.file_path}`,
+            url: `${API_BASE_URL}/${img.file_path}`,
             type: 'new'
           });
         });
-        console.log('✅ Loaded images from repair_images table:', processedImages.length);
       }
       
-      // 2. โหลดรูปภาพจาก image_path เก่า (fallback)
       if (repair.image_path && !processedImages.some(img => img.file_path === repair.image_path)) {
         processedImages.push({
           id: 'legacy',
           file_path: repair.image_path,
           name: 'รูปปัจจุบัน (เก่า)',
-          url: `http://localhost:5000/${repair.image_path}`,
+          url: `${API_BASE_URL}/${repair.image_path}`,
           type: 'legacy'
         });
-        console.log('✅ Added legacy image:', repair.image_path);
       }
       
       setCurrentImages(processedImages);
-      console.log('📷 Total images loaded:', processedImages.length);
-      
-      // ล้างรูปภาพใหม่ที่อาจค้างอยู่
       setSelectedImages([]);
       setImagePreviews([]);
+
+      // ✅ จัดการรูปภาพเสร็จสิ้น
+      const processedCompletionImages = [];
+      if (repair.completion_images && Array.isArray(repair.completion_images) && repair.completion_images.length > 0) {
+        repair.completion_images.forEach((img, index) => {
+          processedCompletionImages.push({
+            id: img.id,
+            file_path: img.file_path,
+            name: img.file_name || `รูปเสร็จสิ้น ${index + 1}`,
+            url: `${API_BASE_URL}/${img.file_path}`,
+            type: 'completion'
+          });
+        });
+      }
+      
+      setCurrentCompletionImages(processedCompletionImages);
+      setCompletionImages([]);
+      setCompletionImagePreviews([]);
       
     } catch (error) {
-      console.error('❌ Error fetching repair:', error);
+      console.error('Fetch repair data error:', error);
       toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
       navigate('/repairs');
     } finally {
@@ -170,22 +266,53 @@ const RepairEdit = () => {
   const fetchCategories = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('/api/repairs/categories', {
+
+      if (!token) {
+        toast.error('ไม่พบ token การเข้าสู่ระบบ');
+        navigate('/login');
+        return;
+      }
+
+      const response = await axios.get(`${API_BASE_URL}/api/repairs/categories`, {
         headers: {
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
-      setCategories(response.data);
+
+      let categoriesData = [];
+      if (Array.isArray(response.data)) {
+        categoriesData = response.data;
+      } else if (response.data.categories && Array.isArray(response.data.categories)) {
+        categoriesData = response.data.categories;
+      } else if (response.data.data && Array.isArray(response.data.data)) {
+        categoriesData = response.data.data;
+      }
+
+      setCategories(categoriesData);
+
+      if (categoriesData.length === 0) {
+        const defaultCategories = [
+          { id: 1, name: 'คอมพิวเตอร์' },
+          { id: 2, name: 'เครือข่าย' },
+          { id: 3, name: 'ไฟฟ้า' },
+          { id: 4, name: 'ประปา' },
+          { id: 5, name: 'แอร์' },
+          { id: 6, name: 'อื่นๆ' }
+        ];
+        setCategories(defaultCategories);
+        toast.info('ใช้หมวดหมู่เริ่มต้น');
+      }
     } catch (error) {
-      console.error('Error fetching categories:', error);
-      setCategories([
+      const defaultCategories = [
         { id: 1, name: 'คอมพิวเตอร์' },
         { id: 2, name: 'เครือข่าย' },
         { id: 3, name: 'ไฟฟ้า' },
         { id: 4, name: 'ประปา' },
         { id: 5, name: 'แอร์' },
         { id: 6, name: 'อื่นๆ' }
-      ]);
+      ];
+      setCategories(defaultCategories);
     }
   };
 
@@ -195,12 +322,12 @@ const RepairEdit = () => {
       
       let response;
       try {
-        response = await axios.get('/api/repairs/technicians', {
+        response = await axios.get(`${API_BASE_URL}/api/repairs/technicians`, {
           headers: { Authorization: `Bearer ${token}` }
         });
       } catch (techError) {
         try {
-          response = await axios.get('/api/admin/users', {
+          response = await axios.get(`${API_BASE_URL}/api/admin/users`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           
@@ -231,10 +358,69 @@ const RepairEdit = () => {
     return false;
   };
 
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (user?.role === 'user') {
+      if (!formData.title.trim()) {
+        newErrors.title = 'กรุณากรอกหัวข้อ';
+      } else if (formData.title.trim().length < 5) {
+        newErrors.title = 'หัวข้อต้องมีความยาวอย่างน้อย 5 ตัวอักษร';
+      } else if (formData.title.trim().length > 200) {
+        newErrors.title = 'หัวข้อต้องมีความยาวไม่เกิน 200 ตัวอักษร';
+      }
+
+      if (!formData.description.trim()) {
+        newErrors.description = 'กรุณากรอกรายละเอียด';
+      } else if (formData.description.trim().length < 10) {
+        newErrors.description = 'รายละเอียดต้องมีความยาวอย่างน้อย 10 ตัวอักษร';
+      }
+
+      if (!formData.category_id) {
+        newErrors.category_id = 'กรุณาเลือกหมวดหมู่';
+      }
+
+      if (!locationType) {
+        newErrors.location = 'กรุณาเลือกประเภทสถานที่';
+      }
+
+      if (locationType === 'indoor') {
+        if (!formData.building) {
+          newErrors.building = 'กรุณาเลือกอาคาร';
+        }
+        if (!formData.floor) {
+          newErrors.floor = 'กรุณาเลือกชั้น';
+        }
+        if (!formData.room.trim()) {
+          newErrors.room = 'กรุณากรอกห้อง';
+        }
+      } else if (locationType === 'outdoor') {
+        if (!formData.outdoor_location.trim()) {
+          newErrors.outdoor_location = 'กรุณากรอกรายละเอียดสถานที่';
+        } else if (formData.outdoor_location.trim().length < 5) {
+          newErrors.outdoor_location = 'รายละเอียดสถานที่ต้องมีความยาวอย่างน้อย 5 ตัวอักษร';
+        }
+      }
+
+      if (!formData.priority) {
+        newErrors.priority = 'กรุณาเลือกระดับความสำคัญ';
+      }
+    }
+
+    // ✅ ตรวจสอบการเปลี่ยนสถานะเป็นเสร็จสิ้น
+    if (formData.status === 'completed') {
+      if (!formData.completion_details || !formData.completion_details.trim()) {
+        newErrors.completion_details = 'กรุณาใส่รายละเอียดการซ่อมเมื่อเปลี่ยนสถานะเป็นเสร็จสิ้น';
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     
-    // ถ้าเปลี่ยนอาคาร ให้รีเซ็ตชั้น
     if (name === 'building') {
       setFormData({
         ...formData,
@@ -247,6 +433,31 @@ const RepairEdit = () => {
         [name]: value
       });
     }
+
+    if (errors[name]) {
+      setErrors({
+        ...errors,
+        [name]: ''
+      });
+    }
+  };
+
+  const handleLocationTypeChange = (type) => {
+    setLocationType(type);
+    setFormData({
+      ...formData,
+      building: '',
+      floor: '',
+      room: '',
+      outdoor_location: ''
+    });
+    const newErrors = { ...errors };
+    delete newErrors.building;
+    delete newErrors.floor;
+    delete newErrors.room;
+    delete newErrors.outdoor_location;
+    delete newErrors.location;
+    setErrors(newErrors);
   };
 
   const handleImageChange = (event) => {
@@ -256,23 +467,42 @@ const RepairEdit = () => {
 
     const validFiles = [];
     const newPreviews = [];
+    const maxFileSize = 5 * 1024 * 1024;
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    
     let processedCount = 0;
+    const totalFiles = files.length;
 
-    files.forEach(file => {
-      if (file.size > 5 * 1024 * 1024) {
+    const updateImageState = () => {
+      if (validFiles.length > 0) {
+        setSelectedImages(prev => {
+          const updatedImages = [...prev, ...validFiles];
+          return updatedImages;
+        });
+        
+        setImagePreviews(prev => {
+          const updatedPreviews = [...prev, ...newPreviews];
+          return updatedPreviews;
+        });
+        
+        toast.success(`เพิ่มรูปภาพสำเร็จ ${validFiles.length} ไฟล์`);
+      }
+    };
+
+    files.forEach((file, index) => {
+      if (file.size > maxFileSize) {
         toast.error(`ไฟล์ ${file.name} มีขนาดใหญ่เกินไป (สูงสุด 5MB)`);
         processedCount++;
-        if (processedCount === files.length && validFiles.length > 0) {
+        if (processedCount === totalFiles && validFiles.length > 0) {
           updateImageState();
         }
         return;
       }
 
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
       if (!allowedTypes.includes(file.type)) {
         toast.error(`ไฟล์ ${file.name} ไม่ใช่รูปภาพที่รองรับ`);
         processedCount++;
-        if (processedCount === files.length && validFiles.length > 0) {
+        if (processedCount === totalFiles && validFiles.length > 0) {
           updateImageState();
         }
         return;
@@ -282,44 +512,158 @@ const RepairEdit = () => {
 
       const reader = new FileReader();
       reader.onload = (e) => {
-        newPreviews.push({
-          id: Date.now() + Math.random(),
+        const previewData = {
+          id: Date.now() + Math.random() + index,
           file: file,
           preview: e.target.result,
           name: file.name
-        });
+        };
+        
+        newPreviews.push(previewData);
 
         processedCount++;
-        if (processedCount === files.length) {
+        
+        if (processedCount === totalFiles) {
           updateImageState();
         }
       };
+
+      reader.onerror = (error) => {
+        toast.error(`เกิดข้อผิดพลาดในการอ่านไฟล์ ${file.name}`);
+        processedCount++;
+        if (processedCount === totalFiles && validFiles.length > 0) {
+          updateImageState();
+        }
+      };
+
       reader.readAsDataURL(file);
     });
-
-    const updateImageState = () => {
-      if (validFiles.length > 0) {
-        setSelectedImages(prev => [...prev, ...validFiles]);
-        setImagePreviews(prev => [...prev, ...newPreviews]);
-        toast.success(`เพิ่มรูปภาพสำเร็จ ${validFiles.length} ไฟล์`);
-      }
-    };
 
     event.target.value = '';
   };
 
-  const removeNewImage = (index) => {
-    setSelectedImages(prev => prev.filter((_, i) => i !== index));
-    setImagePreviews(prev => prev.filter((_, i) => i !== index));
-    toast.info('ลบรูปภาพใหม่แล้ว');
+  // ✅ ฟังก์ชันจัดการรูปภาพเสร็จสิ้น
+  const handleCompletionImageChange = (event) => {
+    const files = Array.from(event.target.files);
+    
+    if (files.length === 0) return;
+
+    const validFiles = [];
+    const newPreviews = [];
+    const maxFileSize = 5 * 1024 * 1024;
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    
+    let processedCount = 0;
+    const totalFiles = files.length;
+
+    const updateImageState = () => {
+      if (validFiles.length > 0) {
+        setCompletionImages(prev => {
+          const updatedImages = [...prev, ...validFiles];
+          return updatedImages;
+        });
+        
+        setCompletionImagePreviews(prev => {
+          const updatedPreviews = [...prev, ...newPreviews];
+          return updatedPreviews;
+        });
+        
+        toast.success(`เพิ่มรูปภาพงานเสร็จสิ้นสำเร็จ ${validFiles.length} ไฟล์`);
+      }
+    };
+
+    files.forEach((file, index) => {
+      if (file.size > maxFileSize) {
+        toast.error(`ไฟล์ ${file.name} มีขนาดใหญ่เกินไป (สูงสุด 5MB)`);
+        processedCount++;
+        if (processedCount === totalFiles && validFiles.length > 0) {
+          updateImageState();
+        }
+        return;
+      }
+
+      if (!allowedTypes.includes(file.type)) {
+        toast.error(`ไฟล์ ${file.name} ไม่ใช่รูปภาพที่รองรับ`);
+        processedCount++;
+        if (processedCount === totalFiles && validFiles.length > 0) {
+          updateImageState();
+        }
+        return;
+      }
+
+      validFiles.push(file);
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const previewData = {
+          id: Date.now() + Math.random() + index,
+          file: file,
+          preview: e.target.result,
+          name: file.name
+        };
+        
+        newPreviews.push(previewData);
+
+        processedCount++;
+        
+        if (processedCount === totalFiles) {
+          updateImageState();
+        }
+      };
+
+      reader.onerror = (error) => {
+        toast.error(`เกิดข้อผิดพลาดในการอ่านไฟล์ ${file.name}`);
+        processedCount++;
+        if (processedCount === totalFiles && validFiles.length > 0) {
+          updateImageState();
+        }
+      };
+
+      reader.readAsDataURL(file);
+    });
+
+    event.target.value = '';
+  };
+
+  const removeImage = (index) => {
+    setSelectedImages(prev => {
+      const newImages = prev.filter((_, i) => i !== index);
+      return newImages;
+    });
+    
+    setImagePreviews(prev => {
+      const newPreviews = prev.filter((_, i) => i !== index);
+      return newPreviews;
+    });
+    
+    toast.info('ลบรูปภาพแล้ว');
   };
 
   const removeCurrentImage = (index) => {
     setCurrentImages(prev => prev.filter((_, i) => i !== index));
-    toast.info('ลบรูปภาพเดิมแล้ว');
+    toast.success('ลบรูปภาพเดิมแล้ว');
   };
 
-  // สร้างรายการชั้นตามอาคารที่เลือก
+  // ✅ ฟังก์ชันลบรูปภาพเสร็จสิ้น
+  const removeCompletionImage = (index) => {
+    setCompletionImages(prev => {
+      const newImages = prev.filter((_, i) => i !== index);
+      return newImages;
+    });
+    
+    setCompletionImagePreviews(prev => {
+      const newPreviews = prev.filter((_, i) => i !== index);
+      return newPreviews;
+    });
+    
+    toast.info('ลบรูปภาพงานเสร็จสิ้นแล้ว');
+  };
+
+  const removeCurrentCompletionImage = (index) => {
+    setCurrentCompletionImages(prev => prev.filter((_, i) => i !== index));
+    toast.success('ลบรูปภาพงานเสร็จสิ้นเดิมแล้ว');
+  };
+
   const getFloorsForBuilding = (buildingId) => {
     if (!buildingId || !buildings[buildingId]) return [];
     
@@ -330,29 +674,17 @@ const RepairEdit = () => {
     return floors;
   };
 
+  // ✅ Image Error Handler
+  const handleImageError = (e) => {
+    console.warn('Image load error:', e.target.src);
+    e.target.src = createPlaceholderImage();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validation
-    if (!formData.title.trim()) {
-      toast.error('กรุณากรอกหัวข้อ');
-      return;
-    }
-    if (!formData.description.trim()) {
-      toast.error('กรุณากรอกรายละเอียด');
-      return;
-    }
-    if (!formData.category_id) {
-      toast.error('กรุณาเลือกหมวดหมู่');
-      return;
-    }
-    if (!formData.building || !formData.floor || !formData.room.trim()) {
-      toast.error('กรุณากรอกข้อมูลสถานที่ให้ครบถ้วน');
-      return;
-    }
-
-    if (formData.status === 'completed' && !formData.completion_details.trim()) {
-      toast.error('กรุณาใส่รายละเอียดการซ่อมเมื่อเปลี่ยนสถานะเป็นเสร็จสิ้น');
+    if (!validateForm()) {
+      toast.error('กรุณาตรวจสอบข้อมูลที่กรอก');
       return;
     }
 
@@ -361,144 +693,193 @@ const RepairEdit = () => {
     try {
       const token = localStorage.getItem('token');
 
-      const submitData = new FormData();
-      submitData.append('title', formData.title);
-      submitData.append('description', formData.description);
-      submitData.append('category_id', formData.category_id);
-      
-      // รวมสถานที่เป็น location string
-      const location = `${buildings[formData.building].name} ชั้น ${formData.floor} ห้อง ${formData.room.trim()}`;
-      submitData.append('location', location);
-      submitData.append('priority', formData.priority);
+      if (!token) {
+        toast.error('ไม่พบ token การเข้าสู่ระบบ');
+        navigate('/login');
+        return;
+      }
 
-      // เพิ่มรูปภาพใหม่ทั้งหมด
-      selectedImages.forEach((image) => {
-        submitData.append('images', image);
-      });
-
-      // ปรับปรุงการส่งข้อมูลรูปภาพเดิมที่ต้องการเก็บไว้
-      const keepImageData = currentImages.map(img => {
-        if (img.id === 'legacy' || img.type === 'legacy') {
-          // สำหรับรูปเก่าจาก image_path
-          return {
-            type: 'legacy',
-            path: img.file_path
-          };
-        } else {
-          // สำหรับรูปใหม่จาก repair_images table
-          return {
-            type: 'new',
-            id: img.id,
-            path: img.file_path
-          };
+      if (user?.role === 'user') {
+        const submitData = new FormData();
+        submitData.append('title', formData.title.trim());
+        submitData.append('description', formData.description.trim());
+        submitData.append('category_id', formData.category_id);
+        
+        let location = '';
+        if (locationType === 'indoor') {
+          location = `${buildings[formData.building].name} ชั้น ${formData.floor} ห้อง ${formData.room.trim()}`;
+        } else if (locationType === 'outdoor') {
+          location = `ภายนอกอาคาร: ${formData.outdoor_location.trim()}`;
         }
-      });
-      
-      submitData.append('keep_images', JSON.stringify(keepImageData));
+        
+        submitData.append('location', location);
+        submitData.append('priority', formData.priority);
 
-      console.log('Submitting data:', {
-        title: formData.title,
-        newImagesCount: selectedImages.length,
-        keepImagesCount: currentImages.length,
-        keepImageData: keepImageData
-      });
+        selectedImages.forEach((image, index) => {
+          submitData.append(`images`, image);
+        });
 
-      // สร้าง axios instance ที่มี timeout ยาวขึ้น
-      const apiClient = axios.create({
-        timeout: 300000, // 5 minutes
-      });
+        const keepImageData = currentImages.map(img => {
+          if (img.id === 'legacy' || img.type === 'legacy') {
+            return {
+              type: 'legacy',
+              path: img.file_path
+            };
+          } else {
+            return {
+              type: 'new',
+              id: img.id,
+              path: img.file_path
+            };
+          }
+        });
+        
+        submitData.append('keep_images', JSON.stringify(keepImageData));
 
-      const response = await apiClient.put(`/api/repairs/${id}`, submitData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${token}`
-        },
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
-          console.log('Upload progress:', percentCompleted + '%');
-        }
-      });
+        const apiClient = axios.create({
+          timeout: 300000,
+        });
 
-      console.log('Update response:', response.data);
-
-      // สำหรับ Admin/Technician - อัพเดทสถานะแยกต่างหาก
-      if (user?.role === 'admin' || user?.role === 'technician') {
-        const statusData = {
-          status: formData.status,
-          assigned_to: formData.assigned_to || null,
-          completion_details: formData.completion_details || null
-        };
-
-        const statusResponse = await axios.put(`/api/repairs/${id}/status`, statusData, {
+        const response = await apiClient.put(`${API_BASE_URL}/api/repairs/${id}`, submitData, {
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        if (response.data.repair && response.data.repair.id) {
+          navigate(`/repairs/${response.data.repair.id}`);
+        } else if (response.data.id) {
+          navigate(`/repairs/${response.data.id}`);
+        } else {
+          navigate(`/repairs/${id}`);
+        }
+      } else {
+        // ✅ สำหรับ admin/technician ที่อัปเดทสถานะ
+        const statusData = new FormData();
+        
+        // ✅ ตรวจสอบว่ามีการกรอกข้อมูลหรือไม่
+        if (!formData.status || formData.status.trim() === '') {
+          throw new Error('กรุณาระบุสถานะ');
+        }
+        
+        // ✅ ใส่ text fields ก่อน (สำคัญสำหรับ multer)
+        statusData.append('status', formData.status.trim());
+        statusData.append('assigned_to', formData.assigned_to || '');
+        statusData.append('completion_details', formData.completion_details || '');
+
+        // ✅ เก็บรูปภาพเสร็จสิ้นเดิม (ใส่หลัง text fields)
+        const keepCompletionImageData = currentCompletionImages.map(img => ({
+          id: img.id,
+          path: img.file_path
+        }));
+        
+        statusData.append('keep_completion_images', JSON.stringify(keepCompletionImageData));
+
+        // ✅ เพิ่มรูปภาพเสร็จสิ้นใหม่ (ใส่ท้ายสุด)
+        completionImages.forEach((image) => {
+          statusData.append('completion_images', image);
+        });
+
+        const apiClient = axios.create({
+          timeout: 300000,
+        });
+
+        console.log('🔄 Updating repair status with data:', {
+          status: formData.status,
+          assigned_to: formData.assigned_to,
+          completion_details: formData.completion_details ? 'provided' : 'empty',
+          completionImagesCount: completionImages.length,
+          keepCompletionImagesCount: keepCompletionImageData.length
+        });
+
+        // ✅ เพิ่ม debug logging
+        console.log('📤 FormData contents:');
+        for (let [key, value] of statusData.entries()) {
+          if (value instanceof File) {
+            console.log(`${key}: File(${value.name}, ${value.size} bytes)`);
+          } else {
+            console.log(`${key}: ${value}`);
+          }
+        }
+
+        const response = await apiClient.put(`${API_BASE_URL}/api/repairs/${id}/status`, statusData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
             Authorization: `Bearer ${token}`
           },
         });
 
-        console.log('Status update response:', statusResponse.data);
+        console.log('✅ Status update response:', response.data);
+        navigate(`/repairs/${id}`);
       }
 
-      toast.success('อัพเดทข้อมูลสำเร็จ! 🎉');
-      navigate(`/repairs/${id}`);
+      toast.success('อัพเดทข้อมูลสำเร็จ! 🎉', {
+        duration: 3000
+      });
+
     } catch (error) {
-      console.error('Update error:', error);
+      console.error('Submit error:', error);
       
       if (error.code === 'ECONNABORTED') {
         toast.error('การอัปโหลดใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง');
-      } else {
-        const message = error.response?.data?.message || 'เกิดข้อผิดพลาดในการอัพเดท';
-        toast.error(message);
-        
-        // แสดงข้อมูล debug เพิ่มเติม
-        if (error.response?.data) {
-          console.error('Server error details:', error.response.data);
+      } else if (error.response?.status === 401) {
+        toast.error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
+        navigate('/login');
+      } else if (error.response?.status === 403) {
+        toast.error('ไม่มีสิทธิ์แก้ไขการแจ้งซ่อม');
+      } else if (error.response?.status === 422) {
+        const serverErrors = error.response.data.errors || {};
+        const errorMessages = Object.values(serverErrors).flat();
+        if (errorMessages.length > 0) {
+          toast.error(`ข้อมูลไม่ถูกต้อง: ${errorMessages.join(', ')}`);
+        } else {
+          toast.error('ข้อมูลที่กรอกไม่ถูกต้อง');
         }
+      } else if (error.response?.status >= 500) {
+        toast.error('เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่ภายหลัง');
+      } else {
+        const message = error.response?.data?.message || error.message || 'เกิดข้อผิดพลาดในการอัพเดท';
+        toast.error(message);
       }
     } finally {
       setSaving(false);
     }
   };
 
-  // เพิ่มฟังก์ชันสำหรับดู debug ข้อมูลรูปภาพ
-  const debugImageData = () => {
-    console.log('🔍 Current Image Debug Info:', {
-      currentImages: currentImages.map(img => ({
-        id: img.id,
-        type: img.type,
-        path: img.file_path,
-        name: img.name
-      })),
-      selectedImages: selectedImages.map(img => ({
-        name: img.name,
-        size: img.size,
-        type: img.type
-      })),
-      imagePreviews: imagePreviews.map(prev => ({
-        id: prev.id,
-        name: prev.name
-      }))
-    });
-  };
-
   const isAdmin = user?.role === 'admin';
   const isTechnician = user?.role === 'technician';
   const canManageStatus = isAdmin || isTechnician;
-  const showDebugInfo = process.env.NODE_ENV === 'development';
+  const canEditDetails = user?.role === 'user';
+
+  const getCategoryName = (categoryId) => {
+    const category = categories.find(cat => cat.id == categoryId);
+    return category ? category.name : 'ไม่ระบุ';
+  };
+
+  const getPriorityText = (priority) => {
+    const priorities = {
+      low: 'ต่ำ - ไม่เร่งด่วน',
+      medium: 'ปานกลาง - ดำเนินการตามปกติ',
+      high: 'สูง - ต้องดำเนินการโดยเร็ว',
+      urgent: 'เร่งด่วน - ต้องดำเนินการทันที'
+    };
+    return priorities[priority] || priority;
+  };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-sm sm:text-base">กำลังโหลดข้อมูล...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
@@ -510,187 +891,380 @@ const RepairEdit = () => {
                 <ArrowLeft className="w-5 h-5 mr-2" />
                 กลับ
               </button>
-              <h1 className="text-xl font-bold text-blue-600">แก้ไขการแจ้งซ่อม</h1>
+              <h1 className="text-xl font-bold text-blue-600">
+                {canEditDetails ? 'แก้ไขการแจ้งซ่อม' : 'จัดการสถานะการซ่อม'}
+              </h1>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Information */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">ข้อมูลพื้นฐาน</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Title */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  หัวข้อ <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="เช่น ไฟดับในห้องประชุม"
-                  maxLength={200}
-                  required
-                />
+      <main className={`mx-auto py-6 px-4 sm:px-6 lg:px-8 ${isMobile ? 'max-w-full' : 'max-w-4xl'}`} style={{ paddingBottom: isMobile ? '80px' : '0' }}>
+        <form onSubmit={handleSubmit} className={`space-y-${isMobile ? '4' : '6'}`}>
+          
+          {!canEditDetails && (
+            <div className={`bg-white shadow-sm border border-gray-100 ${isMobile ? 'rounded-lg' : 'rounded-xl'} ${isMobile ? 'p-4' : 'p-6'}`}>
+              <div className={`${isMobile ? 'mb-4' : 'mb-6'}`}>
+                <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900`}>
+                  รายละเอียดการแจ้งซ่อม
+                </h2>
+                <p className={`text-gray-600 mt-1 ${isMobile ? 'text-sm' : 'text-base'}`}>
+                  {isMobile ? 'ข้อมูลการแจ้งซ่อม' : 'ข้อมูลการแจ้งซ่อมที่ต้องดำเนินการ'}
+                </p>
               </div>
-
-              {/* Category */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  หมวดหมู่ <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="category_id"
-                  value={formData.category_id}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                >
-                  <option value="">เลือกหมวดหมู่</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Priority */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  ระดับความสำคัญ <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="priority"
-                  value={formData.priority}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="low">ต่ำ</option>
-                  <option value="medium">ปานกลาง</option>
-                  <option value="high">สูง</option>
-                  <option value="urgent">เร่งด่วน</option>
-                </select>
-              </div>
-
-              {/* Location Selection */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  สถานที่ <span className="text-red-500">*</span>
-                </label>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Building */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      อาคาร
-                    </label>
-                    <select
-                      name="building"
-                      value={formData.building}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">เลือกอาคาร</option>
-                      {Object.entries(buildings).map(([id, building]) => (
-                        <option key={id} value={id}>
-                          {building.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Floor */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      ชั้น
-                    </label>
-                    <select
-                      name="floor"
-                      value={formData.floor}
-                      onChange={handleInputChange}
-                      disabled={!formData.building}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    >
-                      <option value="">เลือกชั้น</option>
-                      {getFloorsForBuilding(formData.building).map(floor => (
-                        <option key={floor} value={floor}>
-                          ชั้น {floor}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Room */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      ห้อง
-                    </label>
-                    <input
-                      type="text"
-                      name="room"
-                      value={formData.room}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="เช่น 101, ห้องประชุม"
-                    />
+              
+              <div className={`grid grid-cols-1 ${isMobile ? 'gap-4' : 'md:grid-cols-2 gap-6'}`}>
+                <div className={`${isMobile ? '' : 'md:col-span-2'}`}>
+                  <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
+                    หัวข้อ
+                  </label>
+                  <div className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border border-gray-300 rounded-lg bg-gray-50 ${isMobile ? 'text-base' : 'text-sm'}`}>
+                    {formData.title}
                   </div>
                 </div>
 
-                {/* Location Preview */}
-                {formData.building && formData.floor && formData.room && (
-                  <div className="mt-2 p-3 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-800">
-                      📍 <strong>สถานที่:</strong> {buildings[formData.building].name} ชั้น {formData.floor} ห้อง {formData.room}
-                    </p>
+                <div>
+                  <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
+                    หมวดหมู่
+                  </label>
+                  <div className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border border-gray-300 rounded-lg bg-gray-50 ${isMobile ? 'text-base' : 'text-sm'}`}>
+                    {getCategoryName(formData.category_id)}
+                  </div>
+                </div>
+
+                <div>
+                  <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
+                    ระดับความสำคัญ
+                  </label>
+                  <div className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border border-gray-300 rounded-lg bg-gray-50 ${isMobile ? 'text-base' : 'text-sm'}`}>
+                    {getPriorityText(formData.priority)}
+                  </div>
+                </div>
+
+                <div className={`${isMobile ? '' : 'md:col-span-2'}`}>
+                  <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
+                    สถานที่
+                  </label>
+                  <div className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border border-gray-300 rounded-lg bg-gray-50 ${isMobile ? 'text-base' : 'text-sm'}`}>
+                    {locationType === 'indoor' && formData.building && formData.floor && formData.room
+                      ? `${buildings[formData.building].name} ชั้น ${formData.floor} ห้อง ${formData.room}`
+                      : locationType === 'outdoor' && formData.outdoor_location
+                      ? `ภายนอกอาคาร: ${formData.outdoor_location}`
+                      : 'ไม่ระบุ'
+                    }
+                  </div>
+                </div>
+
+                <div className={`${isMobile ? '' : 'md:col-span-2'}`}>
+                  <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
+                    รายละเอียด
+                  </label>
+                  <div className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border border-gray-300 rounded-lg bg-gray-50 ${isMobile ? 'text-base' : 'text-sm'} min-h-[80px] whitespace-pre-wrap`}>
+                    {formData.description}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {canEditDetails && (
+            <div className={`bg-white shadow-sm border border-gray-100 ${isMobile ? 'rounded-lg' : 'rounded-xl'} ${isMobile ? 'p-4' : 'p-6'}`}>
+              <div className={`${isMobile ? 'mb-4' : 'mb-6'}`}>
+                <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900`}>
+                  แก้ไขรายละเอียดการแจ้งซ่อม
+                </h2>
+                <p className={`text-gray-600 mt-1 ${isMobile ? 'text-sm' : 'text-base'}`}>
+                  {isMobile ? 'กรอกข้อมูลให้ครบถ้วน' : 'กรุณากรอกข้อมูลให้ครบถ้วนเพื่อให้เราสามารถดำเนินการได้อย่างรวดเร็ว'}
+                </p>
+                
+                {selectedImages.length > 0 && (
+                  <div className="mt-2 text-sm text-blue-600">
+                    🖼️ เลือกรูปภาพแล้ว: {selectedImages.length} รูป
                   </div>
                 )}
               </div>
+              
+              <div className={`grid grid-cols-1 ${isMobile ? 'gap-4' : 'md:grid-cols-2 gap-6'}`}>
+                <div className={`${isMobile ? '' : 'md:col-span-2'}`}>
+                  <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
+                    หัวข้อ <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={formData.title}
+                    onChange={handleInputChange}
+                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.title ? 'border-red-300' : 'border-gray-300'
+                    } ${isMobile ? 'text-base' : 'text-sm'}`}
+                    placeholder="เช่น ไฟดับในห้องประชุม, คอมพิวเตอร์เปิดไม่ติด"
+                    maxLength={200}
+                    style={{ fontSize: isMobile ? '16px' : '14px' }}
+                    required
+                  />
+                  {errors.title && (
+                    <p className="mt-1 text-sm text-red-600">{errors.title}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formData.title.length}/200 ตัวอักษร
+                  </p>
+                </div>
 
-              {/* Description */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  รายละเอียด <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  rows={4}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="อธิบายปัญหาที่พบอย่างละเอียด..."
-                  required
-                />
+                <div>
+                  <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
+                    หมวดหมู่ <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="category_id"
+                    value={formData.category_id}
+                    onChange={handleInputChange}
+                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.category_id ? 'border-red-300' : 'border-gray-300'
+                    } ${isMobile ? 'text-base' : 'text-sm'}`}
+                    style={{ fontSize: isMobile ? '16px' : '14px' }}
+                    required
+                  >
+                    <option value="">เลือกหมวดหมู่</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.category_id && (
+                    <p className="mt-1 text-sm text-red-600">{errors.category_id}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
+                    ระดับความสำคัญ <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="priority"
+                    value={formData.priority}
+                    onChange={handleInputChange}
+                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.priority ? 'border-red-300' : 'border-gray-300'
+                    } ${isMobile ? 'text-base' : 'text-sm'}`}
+                    style={{ fontSize: isMobile ? '16px' : '14px' }}
+                  >
+                    <option value="low">ต่ำ - ไม่เร่งด่วน</option>
+                    <option value="medium">ปานกลาง - ดำเนินการตามปกติ</option>
+                    <option value="high">สูง - ต้องดำเนินการโดยเร็ว</option>
+                    <option value="urgent">เร่งด่วน - ต้องดำเนินการทันที</option>
+                  </select>
+                  {errors.priority && (
+                    <p className="mt-1 text-sm text-red-600">{errors.priority}</p>
+                  )}
+                </div>
+
+                <div className={`${isMobile ? '' : 'md:col-span-2'}`}>
+                  <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-3`}>
+                    ประเภทสถานที่ <span className="text-red-500">*</span>
+                  </label>
+                  <div className={`grid grid-cols-2 gap-3`}>
+                    <TouchButton
+                      onClick={() => handleLocationTypeChange('indoor')}
+                      variant={locationType === 'indoor' ? 'primary' : 'outline'}
+                      className={`${isMobile ? 'p-4' : 'p-3'} flex-col`}
+                    >
+                      <Building className={`${isMobile ? 'w-6 h-6' : 'w-5 h-5'} mb-2`} />
+                      <span className={`${isMobile ? 'text-sm' : 'text-xs'} font-medium`}>ภายในอาคาร</span>
+                    </TouchButton>
+                    <TouchButton
+                      onClick={() => handleLocationTypeChange('outdoor')}
+                      variant={locationType === 'outdoor' ? 'primary' : 'outline'}
+                      className={`${isMobile ? 'p-4' : 'p-3'} flex-col`}
+                    >
+                      <MapPin className={`${isMobile ? 'w-6 h-6' : 'w-5 h-5'} mb-2`} />
+                      <span className={`${isMobile ? 'text-sm' : 'text-xs'} font-medium`}>ภายนอกอาคาร</span>
+                    </TouchButton>
+                  </div>
+                  {errors.location && (
+                    <p className="mt-2 text-sm text-red-600">{errors.location}</p>
+                  )}
+                </div>
+
+                {locationType && (
+                  <div className={`${isMobile ? '' : 'md:col-span-2'} space-y-4`}>
+                    {locationType === 'indoor' ? (
+                      <>
+                        <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700`}>
+                          รายละเอียดสถานที่ <span className="text-red-500">*</span>
+                        </label>
+                        
+                        <div className={`grid grid-cols-1 ${isMobile ? 'gap-3' : 'md:grid-cols-3 gap-4'}`}>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                              อาคาร
+                            </label>
+                            <select
+                              name="building"
+                              value={formData.building}
+                              onChange={handleInputChange}
+                              className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                                errors.building ? 'border-red-300' : 'border-gray-300'
+                              } ${isMobile ? 'text-base' : 'text-sm'}`}
+                              style={{ fontSize: isMobile ? '16px' : '14px' }}
+                            >
+                              <option value="">เลือกอาคาร</option>
+                              {Object.entries(buildings).map(([id, building]) => (
+                                <option key={id} value={id}>
+                                  {building.name}
+                                </option>
+                              ))}
+                            </select>
+                            {errors.building && (
+                              <p className="mt-1 text-xs text-red-600">{errors.building}</p>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                              ชั้น
+                            </label>
+                            <select
+                              name="floor"
+                              value={formData.floor}
+                              onChange={handleInputChange}
+                              disabled={!formData.building}
+                              className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                                errors.floor ? 'border-red-300' : 'border-gray-300'
+                              } ${isMobile ? 'text-base' : 'text-sm'}`}
+                              style={{ fontSize: isMobile ? '16px' : '14px' }}
+                            >
+                              <option value="">เลือกชั้น</option>
+                              {getFloorsForBuilding(formData.building).map(floor => (
+                                <option key={floor} value={floor}>
+                                  ชั้น {floor}
+                                </option>
+                              ))}
+                            </select>
+                            {errors.floor && (
+                              <p className="mt-1 text-xs text-red-600">{errors.floor}</p>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                              ห้อง
+                            </label>
+                            <input
+                              type="text"
+                              name="room"
+                              value={formData.room}
+                              onChange={handleInputChange}
+                              className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                                errors.room ? 'border-red-300' : 'border-gray-300'
+                              } ${isMobile ? 'text-base' : 'text-sm'}`}
+                              placeholder="เช่น 101, ห้องประชุม"
+                              style={{ fontSize: isMobile ? '16px' : '14px' }}
+                            />
+                            {errors.room && (
+                              <p className="mt-1 text-xs text-red-600">{errors.room}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {formData.building && formData.floor && formData.room && (
+                          <div className={`mt-2 p-3 bg-blue-50 rounded-lg`}>
+                            <p className={`${isMobile ? 'text-sm' : 'text-sm'} text-blue-800`}>
+                              📍 <strong>สถานที่:</strong> {buildings[formData.building].name} ชั้น {formData.floor} ห้อง {formData.room}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
+                            รายละเอียดสถานที่ <span className="text-red-500">*</span>
+                          </label>
+                          <textarea
+                            name="outdoor_location"
+                            value={formData.outdoor_location}
+                            onChange={handleInputChange}
+                            rows={isMobile ? 2 : 3}
+                            className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                              errors.outdoor_location ? 'border-red-300' : 'border-gray-300'
+                            } ${isMobile ? 'text-base' : 'text-sm'}`}
+                            placeholder={isMobile ? 
+                              "เช่น ลานจอดรถด้านหน้า, สวนหลังอาคาร 3..." : 
+                              "อธิบายสถานที่ภายนอกอาคารอย่างละเอียด เช่น ลานจอดรถด้านหน้า, สวนหลังอาคาร 3, บริเวณป้ายรถเมล์..."
+                            }
+                            maxLength={300}
+                            style={{ fontSize: isMobile ? '16px' : '14px', resize: isMobile ? 'vertical' : 'both' }}
+                          />
+                          {errors.outdoor_location && (
+                            <p className="mt-1 text-sm text-red-600">{errors.outdoor_location}</p>
+                          )}
+                          <p className="mt-1 text-xs text-gray-500">
+                            {formData.outdoor_location.length}/300 ตัวอักษร
+                          </p>
+                        </div>
+
+                        {formData.outdoor_location.trim() && (
+                          <div className={`mt-2 p-3 bg-green-50 rounded-lg`}>
+                            <p className={`${isMobile ? 'text-sm' : 'text-sm'} text-green-800`}>
+                              🌿 <strong>สถานที่:</strong> ภายนอกอาคาร - {formData.outdoor_location.trim()}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <div className={`${isMobile ? '' : 'md:col-span-2'}`}>
+                  <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
+                    รายละเอียด <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    rows={isMobile ? 3 : 4}
+                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.description ? 'border-red-300' : 'border-gray-300'
+                    } ${isMobile ? 'text-base' : 'text-sm'}`}
+                    placeholder={isMobile ? 
+                      "อธิบายปัญหาที่พบอย่างละเอียด..." : 
+                      "อธิบายปัญหาที่พบอย่างละเอียด เช่น อาการที่เกิดขึ้น, เวลาที่เกิดปัญหา, ได้ลองแก้ไขอย่างไรบ้าง..."
+                    }
+                    maxLength={1000}
+                    style={{ fontSize: isMobile ? '16px' : '14px', resize: isMobile ? 'vertical' : 'both' }}
+                    required
+                  />
+                  {errors.description && (
+                    <p className="mt-1 text-sm text-red-600">{errors.description}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formData.description.length}/1000 ตัวอักษร
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Status Management - สำหรับ Admin/Technician เท่านั้น */}
           {canManageStatus && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <div className="flex items-center mb-6">
+            <div className={`bg-white shadow-sm border border-gray-100 ${isMobile ? 'rounded-lg' : 'rounded-xl'} ${isMobile ? 'p-4' : 'p-6'}`}>
+              <div className={`flex items-center ${isMobile ? 'mb-4' : 'mb-6'}`}>
                 <Settings className="w-5 h-5 text-gray-400 mr-2" />
-                <h2 className="text-lg font-semibold text-gray-900">จัดการสถานะ</h2>
+                <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900`}>จัดการสถานะ</h2>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Status */}
+              <div className={`grid grid-cols-1 ${isMobile ? 'gap-4' : 'md:grid-cols-2 gap-6'}`}>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
                     สถานะ
                   </label>
                   <select
                     name="status"
                     value={formData.status}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isMobile ? 'text-base' : 'text-sm'}`}
+                    style={{ fontSize: isMobile ? '16px' : '14px' }}
                   >
                     <option value="pending">รอดำเนินการ</option>
                     <option value="assigned">มอบหมายแล้ว</option>
@@ -700,16 +1274,16 @@ const RepairEdit = () => {
                   </select>
                 </div>
 
-                {/* Assigned To */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
                     มอบหมายให้
                   </label>
                   <select
                     name="assigned_to"
                     value={formData.assigned_to}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isMobile ? 'text-base' : 'text-sm'}`}
+                    style={{ fontSize: isMobile ? '16px' : '14px' }}
                   >
                     <option value="">ไม่มอบหมาย</option>
                     {technicians.map((tech) => (
@@ -720,200 +1294,363 @@ const RepairEdit = () => {
                   </select>
                 </div>
 
-                {/* Completion Details */}
                 {formData.status === 'completed' && (
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      รายละเอียดการซ่อม <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      name="completion_details"
-                      value={formData.completion_details}
-                      onChange={handleInputChange}
-                      rows={3}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="อธิบายวิธีการซ่อมและผลลัพธ์..."
-                      required={formData.status === 'completed'}
-                    />
-                  </div>
+                  <>
+                    <div className={`${isMobile ? '' : 'md:col-span-2'}`}>
+                      <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
+                        รายละเอียดการซ่อม <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        name="completion_details"
+                        value={formData.completion_details}
+                        onChange={handleInputChange}
+                        rows={3}
+                        className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                          errors.completion_details ? 'border-red-300' : 'border-gray-300'
+                        } ${isMobile ? 'text-base' : 'text-sm'}`}
+                        placeholder="อธิบายวิธีการซ่อมและผลลัพธ์..."
+                        style={{ fontSize: isMobile ? '16px' : '14px' }}
+                        required={formData.status === 'completed'}
+                      />
+                      {errors.completion_details && (
+                        <p className="mt-1 text-sm text-red-600">{errors.completion_details}</p>
+                      )}
+                    </div>
+
+                    {/* ✅ ส่วนอัปโหลดรูปภาพเสร็จสิ้น */}
+                    <div className={`${isMobile ? '' : 'md:col-span-2'}`}>
+                      <div className="flex items-center mb-4">
+                        <CheckCircle className="w-5 h-5 text-green-500 mr-2" />
+                        <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900`}>
+                          รูปภาพงานเสร็จสิ้น
+                        </h3>
+                        {(currentCompletionImages.length > 0 || completionImagePreviews.length > 0) && (
+                          <span className="ml-2 text-sm text-green-600">
+                            ({currentCompletionImages.length + completionImagePreviews.length} รูป)
+                          </span>
+                        )}
+                      </div>
+
+                      {/* รูปภาพเสร็จสิ้นปัจจุบัน */}
+                      {currentCompletionImages.length > 0 && (
+                        <div className={`${isMobile ? 'mb-4' : 'mb-6'}`}>
+                          <h4 className={`${isMobile ? 'text-sm' : 'text-md'} font-medium text-gray-700 mb-3`}>
+                            รูปภาพงานเสร็จสิ้นปัจจุบัน ({currentCompletionImages.length} รูป)
+                          </h4>
+                          <div className={`grid ${isMobile ? 'grid-cols-2 gap-3' : 'grid-cols-2 md:grid-cols-3 gap-4'}`}>
+                            {currentCompletionImages.map((image, index) => (
+                              <div key={`completion-current-${index}`} className="relative group">
+                                <img
+                                  src={image.url}
+                                  alt={`Completion ${index + 1}`}
+                                  className={`w-full ${isMobile ? 'h-24' : 'h-32'} object-cover rounded-lg border border-green-300`}
+                                  onError={handleImageError}
+                                  loading="lazy"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeCurrentCompletionImage(index)}
+                                  className={`absolute top-1 right-1 ${isMobile ? 'p-1 w-6 h-6' : 'p-1.5'} bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-full shadow-lg ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                                >
+                                  <X className={`${isMobile ? 'w-3 h-3' : 'w-3 h-3'}`} />
+                                </button>
+                                <div className={`absolute bottom-1 left-1 bg-black bg-opacity-70 text-white px-1 py-0.5 rounded text-xs max-w-[80%] truncate`}>
+                                  {isMobile ? `${index + 1}` : (image.name || 'งานเสร็จสิ้น')}
+                                </div>
+                                <div className={`absolute top-1 left-1 bg-green-600 text-white px-1 py-0.5 rounded text-xs`}>
+                                  เดิม {index + 1}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* รูปภาพเสร็จสิ้นใหม่ */}
+                      {completionImagePreviews.length > 0 && (
+                        <div className={`${isMobile ? 'mb-4' : 'mb-6'}`}>
+                          <h4 className={`${isMobile ? 'text-sm' : 'text-md'} font-medium text-gray-700 mb-3`}>
+                            รูปภาพงานเสร็จสิ้นใหม่ ({completionImagePreviews.length} รูป)
+                          </h4>
+                          <div className={`grid ${isMobile ? 'grid-cols-2 gap-3' : 'grid-cols-2 md:grid-cols-3 gap-4'}`}>
+                            {completionImagePreviews.map((preview, index) => (
+                              <div key={preview.id} className="relative group">
+                                <img
+                                  src={preview.preview}
+                                  alt={`New Completion ${index + 1}`}
+                                  className={`w-full ${isMobile ? 'h-24' : 'h-32'} object-cover rounded-lg border border-green-300`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeCompletionImage(index)}
+                                  className={`absolute top-1 right-1 ${isMobile ? 'p-1 w-6 h-6' : 'p-1.5'} bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-full shadow-lg ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                                >
+                                  <X className={`${isMobile ? 'w-3 h-3' : 'w-3 h-3'}`} />
+                                </button>
+                                <div className={`absolute bottom-1 left-1 bg-black bg-opacity-70 text-white px-1 py-0.5 rounded text-xs max-w-[80%] truncate`}>
+                                  {isMobile ? `${index + 1}` : preview.name}
+                                </div>
+                                <div className={`absolute top-1 left-1 bg-green-600 text-white px-1 py-0.5 rounded text-xs`}>
+                                  ใหม่ {index + 1}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ส่วนอัปโหลดรูปภาพเสร็จสิ้น */}
+                      <div className={`border-2 border-dashed border-green-300 rounded-lg ${isMobile ? 'p-4' : 'p-6'} hover:border-green-400 transition-colors bg-green-50`}>
+                        <div className="text-center">
+                          {isMobile ? (
+                            <Camera className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                          ) : (
+                            <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+                          )}
+                          
+                          <input
+                            id="completion-images"
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                            multiple
+                            capture={isMobile ? "environment" : undefined}
+                            onChange={handleCompletionImageChange}
+                            className="hidden"
+                          />
+                          
+                          <label htmlFor="completion-images" className="cursor-pointer block">
+                            <div className={`inline-flex items-center justify-center px-4 py-3 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-lg hover:shadow-xl rounded-lg transition-all duration-200 active:scale-95 ${isMobile ? 'w-full text-base font-medium' : 'text-sm'}`}>
+                              <Upload className={`${isMobile ? 'w-4 h-4' : 'w-4 h-4'} mr-2`} />
+                              {isMobile ? 'ถ่ายรูปงานเสร็จ' : currentCompletionImages.length > 0 || completionImagePreviews.length > 0 ? 'เพิ่มรูปงานเสร็จเพิ่มเติม' : 'เพิ่มรูปภาพงานเสร็จสิ้น'}
+                            </div>
+                          </label>
+                          
+                          <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600 mt-2`}>
+                            {isMobile ? 
+                              'อัปโหลดรูปภาพแสดงผลงานที่เสร็จสิ้นแล้ว' :
+                              'อัปโหลดรูปภาพแสดงผลงานที่เสร็จสิ้นแล้ว (JPEG, PNG, GIF, WebP ขนาดไม่เกิน 5MB)'
+                            }
+                          </p>
+                          {!isMobile && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              ช่วยให้ผู้แจ้งเห็นผลการซ่อมแซมอย่างชัดเจน
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {(currentCompletionImages.length > 0 || completionImagePreviews.length > 0) && (
+                        <div className="mt-4 text-center">
+                          <input
+                            id="completion-images-add"
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                            multiple
+                            capture={isMobile ? "environment" : undefined}
+                            onChange={handleCompletionImageChange}
+                            className="hidden"
+                          />
+                          <label htmlFor="completion-images-add" className="cursor-pointer">
+                            <span className={`text-green-600 hover:text-green-700 ${isMobile ? 'text-sm' : 'text-sm'} inline-flex items-center`}>
+                              <Plus className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} />
+                              เพิ่มรูปงานเสร็จอีก
+                            </span>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             </div>
           )}
 
-          {/* Image Management */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">จัดการรูปภาพ</h2>
+          {canEditDetails && (
+            <div className={`bg-white shadow-sm border border-gray-100 ${isMobile ? 'rounded-lg' : 'rounded-xl'} ${isMobile ? 'p-4' : 'p-6'}`}>
+              <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900 ${isMobile ? 'mb-4' : 'mb-6'}`}>จัดการรูปภาพ</h2>
 
-            {/* Current Images */}
-            {currentImages.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-md font-medium text-gray-700 mb-3">รูปภาพปัจจุบัน ({currentImages.length} รูป)</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {currentImages.map((image, index) => (
-                    <div key={`current-${index}`} className="relative group">
-                      <img
-                        src={image.url}
-                        alt={`Current ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-lg border border-gray-300"
-                        onError={(e) => {
-                          console.error('Image load error:', image.url);
-                          e.target.src = '/placeholder-image.png'; // fallback image
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeCurrentImage(index)}
-                        className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 transition-colors shadow-lg opacity-0 group-hover:opacity-100"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                      <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs">
-                        {image.name || 'รูปปัจจุบัน'}
+              {currentImages.length > 0 && (
+                <div className={`${isMobile ? 'mb-4' : 'mb-6'}`}>
+                  <h3 className={`${isMobile ? 'text-sm' : 'text-md'} font-medium text-gray-700 mb-3`}>รูปภาพปัจจุบัน ({currentImages.length} รูป)</h3>
+                  <div className={`grid ${isMobile ? 'grid-cols-2 gap-3' : 'grid-cols-2 md:grid-cols-3 gap-4'}`}>
+                    {currentImages.map((image, index) => (
+                      <div key={`current-${index}`} className="relative group">
+                        <img
+                          src={image.url}
+                          alt={`Current ${index + 1}`}
+                          className={`w-full ${isMobile ? 'h-24' : 'h-32'} object-cover rounded-lg border border-gray-300`}
+                          onError={handleImageError}
+                          loading="lazy"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeCurrentImage(index)}
+                          className={`absolute top-1 right-1 ${isMobile ? 'p-1 w-6 h-6' : 'p-1.5'} bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-full shadow-lg ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                        >
+                          <X className={`${isMobile ? 'w-3 h-3' : 'w-3 h-3'}`} />
+                        </button>
+                        <div className={`absolute bottom-1 left-1 bg-black bg-opacity-70 text-white px-1 py-0.5 rounded text-xs max-w-[80%] truncate`}>
+                          {isMobile ? `${index + 1}` : (image.name || 'รูปปัจจุบัน')}
+                        </div>
+                        <div className={`absolute top-1 left-1 bg-green-600 text-white px-1 py-0.5 rounded text-xs`}>
+                          เดิม {index + 1}
+                        </div>
                       </div>
-                      <div className="absolute top-2 left-2 bg-green-600 text-white px-2 py-1 rounded text-xs">
-                        เดิม {index + 1}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* New Images */}
-            {imagePreviews.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-md font-medium text-gray-700 mb-3">รูปภาพใหม่ ({imagePreviews.length} รูป)</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {imagePreviews.map((preview, index) => (
-                    <div key={preview.id} className="relative group">
-                      <img
-                        src={preview.preview}
-                        alt={`New ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-lg border border-gray-300"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeNewImage(index)}
-                        className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 transition-colors shadow-lg opacity-0 group-hover:opacity-100"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                      <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs max-w-[80%] truncate">
-                        {preview.name}
+              {imagePreviews.length > 0 && (
+                <div className={`${isMobile ? 'mb-4' : 'mb-6'}`}>
+                  <h3 className={`${isMobile ? 'text-sm' : 'text-md'} font-medium text-gray-700 mb-3`}>รูปภาพใหม่ ({imagePreviews.length} รูป)</h3>
+                  <div className={`grid ${isMobile ? 'grid-cols-2 gap-3' : 'grid-cols-2 md:grid-cols-3 gap-4'}`}>
+                    {imagePreviews.map((preview, index) => (
+                      <div key={preview.id} className="relative group">
+                        <img
+                          src={preview.preview}
+                          alt={`New ${index + 1}`}
+                          className={`w-full ${isMobile ? 'h-24' : 'h-32'} object-cover rounded-lg border border-gray-300`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className={`absolute top-1 right-1 ${isMobile ? 'p-1 w-6 h-6' : 'p-1.5'} bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-full shadow-lg ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                        >
+                          <X className={`${isMobile ? 'w-3 h-3' : 'w-3 h-3'}`} />
+                        </button>
+                        <div className={`absolute bottom-1 left-1 bg-black bg-opacity-70 text-white px-1 py-0.5 rounded text-xs max-w-[80%] truncate`}>
+                          {isMobile ? `${index + 1}` : preview.name}
+                        </div>
+                        <div className={`absolute top-1 left-1 bg-blue-600 text-white px-1 py-0.5 rounded text-xs`}>
+                          ใหม่ {index + 1}
+                        </div>
                       </div>
-                      <div className="absolute top-2 left-2 bg-blue-600 text-white px-2 py-1 rounded text-xs">
-                        ใหม่ {index + 1}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Upload Area */}
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-gray-400 transition-colors">
-              <div className="text-center">
-                <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <label htmlFor="images" className="cursor-pointer">
-                  <span className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center">
-                    <Upload className="w-4 h-4 mr-2" />
-                    {currentImages.length > 0 || imagePreviews.length > 0 ? 'เพิ่มรูปภาพเพิ่มเติม' : 'เพิ่มรูปภาพ'}
-                  </span>
+              <div className={`border-2 border-dashed border-gray-300 rounded-lg ${isMobile ? 'p-4' : 'p-6'} hover:border-gray-400 transition-colors`}>
+                <div className="text-center">
+                  {isMobile ? (
+                    <Camera className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  ) : (
+                    <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  )}
+                  
                   <input
                     id="images"
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                     multiple
+                    capture={isMobile ? "environment" : undefined}
                     onChange={handleImageChange}
                     className="hidden"
                   />
-                </label>
-                <p className="text-sm text-gray-500 mt-2">
-                  รองรับไฟล์ JPEG, PNG, GIF, WebP ขนาดไม่เกิน 5MB ต่อไฟล์
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  สามารถเลือกหลายไฟล์พร้อมกัน และเพิ่มรูปได้ไม่จำกัด
-                </p>
-              </div>
-            </div>
-
-            {/* Quick Add Button */}
-            {(currentImages.length > 0 || imagePreviews.length > 0) && (
-              <div className="mt-4 text-center">
-                <label htmlFor="images-quick" className="cursor-pointer">
-                  <span className="text-blue-600 hover:text-blue-700 text-sm inline-flex items-center">
-                    <Plus className="w-4 h-4 mr-1" />
-                    เพิ่มรูปอีก
-                  </span>
-                  <input
-                    id="images-quick"
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-            )}
-
-            {/* Debug Info - Development Only */}
-            {showDebugInfo && (
-              <div className="mt-4 p-4 bg-gray-100 rounded-lg">
-                <button
-                  type="button"
-                  onClick={debugImageData}
-                  className="text-sm bg-gray-600 text-white px-3 py-1 rounded mr-2"
-                >
-                  Debug Image Data (Console)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const token = localStorage.getItem('token');
-                    axios.get(`/api/repairs/${id}/images-debug`, {
-                      headers: { Authorization: `Bearer ${token}` }
-                    }).then(res => {
-                      console.log('🔍 Server Image Debug:', res.data);
-                    }).catch(err => {
-                      console.log('Debug endpoint not available:', err);
-                    });
-                  }}
-                  className="text-sm bg-blue-600 text-white px-3 py-1 rounded"
-                >
-                  Server Debug (Console)
-                </button>
-                <div className="mt-2 text-xs text-gray-600">
-                  <p>Current Images: {currentImages.length}</p>
-                  <p>Selected New Images: {selectedImages.length}</p>
-                  <p>Image Previews: {imagePreviews.length}</p>
+                  
+                  <label htmlFor="images" className="cursor-pointer block">
+                    <div className={`inline-flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-lg hover:shadow-xl rounded-lg transition-all duration-200 active:scale-95 ${isMobile ? 'w-full text-base font-medium' : 'text-sm'}`}>
+                      <Upload className={`${isMobile ? 'w-4 h-4' : 'w-4 h-4'} mr-2`} />
+                      {isMobile ? 'ถ่ายรูป/เลือกรูป' : currentImages.length > 0 || imagePreviews.length > 0 ? 'เพิ่มรูปภาพเพิ่มเติม' : 'เพิ่มรูปภาพ'}
+                    </div>
+                  </label>
+                  
+                  <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 mt-2`}>
+                    {isMobile ? 
+                      'JPEG, PNG, GIF ขนาดไม่เกิน 5MB' :
+                      'รองรับไฟล์ JPEG, PNG, GIF, WebP ขนาดไม่เกิน 5MB ต่อไฟล์'
+                    }
+                  </p>
+                  {!isMobile && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      สามารถเลือกหลายไฟล์พร้อมกัน และเพิ่มรูปได้ไม่จำกัด
+                    </p>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Submit Buttons */}
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={() => navigate(`/repairs/${id}`)}
-              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              ยกเลิก
-            </button>
-            <button
+              {(currentImages.length > 0 || imagePreviews.length > 0) && (
+                <div className="mt-4 text-center">
+                  <input
+                    id="images-add"
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                    multiple
+                    capture={isMobile ? "environment" : undefined}
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                  <label htmlFor="images-add" className="cursor-pointer">
+                    <span className={`text-blue-600 hover:text-blue-700 ${isMobile ? 'text-sm' : 'text-sm'} inline-flex items-center`}>
+                      <Plus className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} />
+                      เพิ่มรูปอีก
+                    </span>
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!canEditDetails && currentImages.length > 0 && (
+            <div className={`bg-white shadow-sm border border-gray-100 ${isMobile ? 'rounded-lg' : 'rounded-xl'} ${isMobile ? 'p-4' : 'p-6'}`}>
+              <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900 ${isMobile ? 'mb-4' : 'mb-6'}`}>รูปภาพประกอบ</h2>
+              
+              <div className={`grid ${isMobile ? 'grid-cols-2 gap-3' : 'grid-cols-2 md:grid-cols-3 gap-4'}`}>
+                {currentImages.map((image, index) => (
+                  <div key={`current-${index}`} className="relative group">
+                    <img
+                      src={image.url}
+                      alt={`Current ${index + 1}`}
+                      className={`w-full ${isMobile ? 'h-24' : 'h-32'} object-cover rounded-lg border border-gray-300`}
+                      onError={handleImageError}
+                      loading="lazy"
+                    />
+                    <div className={`absolute bottom-1 left-1 bg-black bg-opacity-70 text-white px-1 py-0.5 rounded text-xs max-w-[80%] truncate`}>
+                      {isMobile ? `${index + 1}` : (image.name || 'รูปภาพ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className={`flex ${isMobile ? 'flex-col space-y-3' : 'justify-end space-x-4'} ${isMobile ? 'pt-4' : 'pt-6'} border-t border-gray-200`}>
+            {!isMobile && (
+              <TouchButton
+                onClick={() => navigate(`/repairs/${id}`)}
+                variant="secondary"
+              >
+                ยกเลิก
+              </TouchButton>
+            )}
+            <TouchButton
               type="submit"
               disabled={saving}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
+              variant="primary"
+              className={`${isMobile ? 'w-full order-first' : ''}`}
             >
               {saving ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  กำลังบันทึก...
+                </>
               ) : (
-                <Save className="w-5 h-5 mr-2" />
+                <>
+                  <Save className="w-5 h-5 mr-2" />
+                  {isMobile ? 'บันทึกการเปลี่ยนแปลง' : 'บันทึกการเปลี่ยนแปลง'}
+                </>
               )}
-              {saving ? 'กำลังบันทึก...' : 'บันทึกการเปลี่ยนแปลง'}
-            </button>
+            </TouchButton>
+            {isMobile && (
+              <TouchButton
+                onClick={() => navigate(`/repairs/${id}`)}
+                variant="secondary"
+                className="w-full"
+              >
+                ยกเลิก
+              </TouchButton>
+            )}
           </div>
         </form>
       </main>

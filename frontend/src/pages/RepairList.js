@@ -357,19 +357,18 @@ const RepairList = () => {
     <div class="header">
         <h1>📋 รายงานการแจ้งซ่อม (${getViewModeText(activeView)})</h1>
         <p>สร้างเมื่อ: ${new Date().toLocaleDateString("th-TH", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })}</p>
-        <p>ผู้ส่งออก: ${user?.full_name || user?.username || "ไม่ระบุ"} (${
-        user?.role === "admin"
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}</p>
+        <p>ผู้ส่งออก: ${user?.full_name || user?.username || "ไม่ระบุ"} (${user?.role === "admin"
           ? "ผู้ดูแลระบบ"
           : user?.role === "technician"
-          ? "ช่างเทคนิค"
-          : "ผู้ใช้งาน"
-      })</p>
+            ? "ช่างเทคนิค"
+            : "ผู้ใช้งาน"
+        })</p>
     </div>
     
     <div class="summary">
@@ -386,8 +385,8 @@ const RepairList = () => {
             <div class="summary-item">
                 <strong>กำลังดำเนินการ:</strong><br>
                 ${(
-                  getFilteredCount("assigned") + getFilteredCount("in_progress")
-                ).toLocaleString("th-TH")} รายการ
+          getFilteredCount("assigned") + getFilteredCount("in_progress")
+        ).toLocaleString("th-TH")} รายการ
             </div>
             <div class="summary-item">
                 <strong>เสร็จสิ้นแล้ว:</strong><br>
@@ -398,20 +397,17 @@ const RepairList = () => {
         <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 10px;">
             <strong>🔍 ตัวกรองที่ใช้:</strong>
             ประเภท: ${getViewModeText(activeView)}, 
-            สถานะ: ${
-              statusFilter === "all" ? "ทั้งหมด" : getStatusText(statusFilter)
-            }, 
-            ความสำคัญ: ${
-              priorityFilter === "all"
-                ? "ทั้งหมด"
-                : getPriorityText(priorityFilter)
-            }, 
-            หมวดหมู่: ${
-              categoryFilter === "all"
-                ? "ทั้งหมด"
-                : categories.find((c) => c.id == categoryFilter)?.name ||
-                  "ไม่ระบุ"
-            }, 
+            สถานะ: ${statusFilter === "all" ? "ทั้งหมด" : getStatusText(statusFilter)
+        }, 
+            ความสำคัญ: ${priorityFilter === "all"
+          ? "ทั้งหมด"
+          : getPriorityText(priorityFilter)
+        }, 
+            หมวดหมู่: ${categoryFilter === "all"
+          ? "ทั้งหมด"
+          : categories.find((c) => c.id == categoryFilter)?.name ||
+          "ไม่ระบุ"
+        }, 
             ช่วงเวลา: ${getDateRangeText(dateRangeFilter)}
         </div>
     </div>
@@ -435,74 +431,70 @@ const RepairList = () => {
         </thead>
         <tbody>
             ${exportData
-              .map(
-                (repair) => `
+          .map(
+            (repair) => `
                 <tr>
                     <td class="nowrap center">REP-${repair.id
-                      .toString()
-                      .padStart(5, "0")}</td>
+                .toString()
+                .padStart(5, "0")}</td>
                     <td><strong>${(repair.title || "")
-                      .replace(/</g, "&lt;")
-                      .replace(/>/g, "&gt;")}</strong></td>
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")}</strong></td>
                     <td class="description">${(repair.description || "")
-                      .replace(/</g, "&lt;")
-                      .replace(/>/g, "&gt;")
-                      .substring(0, 100)}${
-                  repair.description?.length > 100 ? "..." : ""
-                }</td>
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .substring(0, 100)}${repair.description?.length > 100 ? "..." : ""
+              }</td>
                     <td class="center">
                         <span class="status-${repair.status}">${getStatusText(
-                  repair.status
-                )}</span>
+                repair.status
+              )}</span>
                     </td>
                     <td class="center">
-                        <span class="priority-${
-                          repair.priority
-                        }">${getPriorityText(repair.priority)}</span>
+                        <span class="priority-${repair.priority
+              }">${getPriorityText(repair.priority)}</span>
                     </td>
                     <td>${(repair.location || "")
-                      .replace(/</g, "&lt;")
-                      .replace(/>/g, "&gt;")}</td>
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")}</td>
                     <td class="center">${repair.category_name || "ไม่ระบุ"}</td>
                     <td>${repair.requester_name || "ไม่ระบุ"}</td>
-                    <td class="center">${
-                      repair.assigned_name || "<em>ยังไม่มอบหมาย</em>"
-                    }</td>
+                    <td class="center">${repair.assigned_name || "<em>ยังไม่มอบหมาย</em>"
+              }</td>
                     <td class="nowrap center">${new Date(
-                      repair.created_at
-                    ).toLocaleDateString("th-TH", {
-                      year: "numeric",
-                      month: "2-digit",
-                      day: "2-digit",
-                    })}</td>
-                    <td class="nowrap center">${
-                      repair.completed_at
-                        ? new Date(repair.completed_at).toLocaleDateString(
-                            "th-TH",
-                            {
-                              year: "numeric",
-                              month: "2-digit",
-                              day: "2-digit",
-                            }
-                          )
-                        : "-"
-                    }</td>
+                repair.created_at
+              ).toLocaleDateString("th-TH", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              })}</td>
+                    <td class="nowrap center">${repair.completed_at
+                ? new Date(repair.completed_at).toLocaleDateString(
+                  "th-TH",
+                  {
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                  }
+                )
+                : "-"
+              }</td>
                     <td class="center">${repair.image_path ? "✅" : "❌"}</td>
                 </tr>
             `
-              )
-              .join("")}
+          )
+          .join("")}
         </tbody>
     </table>
     
     <div class="footer">
         <p>📄 รายงานนี้สร้างโดยระบบแจ้งซ่อม | รวม ${exportData.length.toLocaleString(
-          "th-TH"
-        )} รายการ</p>
+            "th-TH"
+          )} รายการ</p>
         <p>สร้างเมื่อ: ${new Date().toLocaleString("th-TH")}</p>
         <p><strong>หมายเหตุ:</strong> ข้อมูลนี้แสดงรายการแจ้งซ่อม${getViewModeText(
-          activeView
-        )}ในระบบ</p>
+            activeView
+          )}ในระบบ</p>
     </div>
 </body>
 </html>`;
@@ -772,9 +764,8 @@ const RepairList = () => {
           className="flex items-center px-2 sm:px-3 py-2 text-xs sm:text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
         >
           <RefreshCw
-            className={`w-3 h-3 sm:w-4 sm:h-4 ${isMobile ? "" : "mr-1"} ${
-              refreshing ? "animate-spin" : ""
-            }`}
+            className={`w-3 h-3 sm:w-4 sm:h-4 ${isMobile ? "" : "mr-1"} ${refreshing ? "animate-spin" : ""
+              }`}
           />
           {!isMobile && "รีเฟรช"}
         </button>
@@ -802,7 +793,6 @@ const RepairList = () => {
     </div>
   );
 
-  // Desktop Header Content
   const desktopHeaderContent = (
     <div className="hidden md:flex items-center space-x-3">
       <button
@@ -829,21 +819,19 @@ const RepairList = () => {
       <div className="flex items-center space-x-1">
         <button
           onClick={() => setViewMode("list")}
-          className={`p-2 rounded-lg transition-colors ${
-            viewMode === "list"
+          className={`p-2 rounded-lg transition-colors ${viewMode === "list"
               ? "bg-blue-100 text-blue-700"
               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
+            }`}
         >
           <List className="w-4 h-4" />
         </button>
         <button
           onClick={() => setViewMode("grid")}
-          className={`p-2 rounded-lg transition-colors ${
-            viewMode === "grid"
+          className={`p-2 rounded-lg transition-colors ${viewMode === "grid"
               ? "bg-blue-100 text-blue-700"
               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
+            }`}
         >
           <Grid3X3 className="w-4 h-4" />
         </button>
@@ -949,19 +937,6 @@ const RepairList = () => {
           </Link>
         )}
 
-        {/* Move to Completed Category Button */}
-        {(user?.role === "admin" || user?.role === "technician") &&
-          repair.status === "completed" && (
-            <button
-              onClick={() => moveToCompletedCategory(repair.id)}
-              className="flex items-center justify-center px-3 py-2 text-xs sm:text-sm bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
-              title="ย้ายไป category เสร็จสิ้น"
-            >
-              <Archive className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-              เก็บเข้าคลัง
-            </button>
-          )}
-
         {user?.role === "user" &&
           !canEdit(repair) &&
           repair.requester_id === user.id && (
@@ -979,39 +954,6 @@ const RepairList = () => {
       headerContent={isMobile ? mobileHeaderContent : desktopHeaderContent}
     >
       <div className="space-y-4 sm:space-y-6">
-        {/* Page Description */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-            <div className="mb-4 lg:mb-0">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
-                จัดการการแจ้งซ่อม - {getViewModeText(activeView)}
-              </h2>
-              <p className="text-sm sm:text-base text-gray-600">
-                ดูและติดตามรายการแจ้งซ่อม{activeView === "all" ? "ทั้งหมด" : ""}
-                ในระบบ
-                {user?.role === "user" && (
-                  <span className="block text-xs sm:text-sm text-amber-600 mt-1">
-                    💡 คุณสามารถแก้ไขได้เฉพาะรายการที่คุณสร้างและยังอยู่ในสถานะ
-                    "รอดำเนินการ" เท่านั้น
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="text-left lg:text-right text-xs sm:text-sm text-gray-500">
-              <p>ผู้ใช้: {user?.full_name || user?.username}</p>
-              <p>
-                บทบาท:{" "}
-                {user?.role === "admin"
-                  ? "ผู้ดูแลระบบ"
-                  : user?.role === "technician"
-                  ? "ช่างเทคนิค"
-                  : "ผู้ใช้งาน"}
-              </p>
-              <p className="text-green-600">✅ ดูได้ตามสิทธิ์</p>
-            </div>
-          </div>
-        </div>
-
         {/* View Mode Selector */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1024,11 +966,10 @@ const RepairList = () => {
                   setActiveView("active");
                   setCurrentPage(1);
                 }}
-                className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-                  activeView === "active"
+                className={`px-4 py-2 text-sm rounded-lg transition-colors ${activeView === "active"
                     ? "bg-blue-600 text-white"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
+                  }`}
               >
                 <AlertCircle className="w-4 h-4 mr-1 inline" />
                 รายการที่ยังดำเนินการ
@@ -1038,11 +979,10 @@ const RepairList = () => {
                   setActiveView("completed");
                   setCurrentPage(1);
                 }}
-                className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-                  activeView === "completed"
+                className={`px-4 py-2 text-sm rounded-lg transition-colors ${activeView === "completed"
                     ? "bg-green-600 text-white"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
+                  }`}
               >
                 <Archive className="w-4 h-4 mr-1 inline" />
                 รายการที่เสร็จสิ้นแล้ว
@@ -1052,11 +992,10 @@ const RepairList = () => {
                   setActiveView("all");
                   setCurrentPage(1);
                 }}
-                className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-                  activeView === "all"
+                className={`px-4 py-2 text-sm rounded-lg transition-colors ${activeView === "all"
                     ? "bg-purple-600 text-white"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
+                  }`}
               >
                 <List className="w-4 h-4 mr-1 inline" />
                 ทั้งหมด
@@ -1440,7 +1379,7 @@ const RepairList = () => {
                         {technicianFilter === "unassigned"
                           ? "ยังไม่มอบหมาย"
                           : technicians.find((t) => t.id == technicianFilter)
-                              ?.full_name}
+                            ?.full_name}
                         <button
                           onClick={() => setTechnicianFilter("all")}
                           className="ml-1 text-green-600 hover:text-green-800"
@@ -1588,21 +1527,19 @@ const RepairList = () => {
                 <div className="md:hidden flex items-center space-x-1 mt-2">
                   <button
                     onClick={() => setViewMode("list")}
-                    className={`p-2 rounded-lg transition-colors ${
-                      viewMode === "list"
+                    className={`p-2 rounded-lg transition-colors ${viewMode === "list"
                         ? "bg-blue-100 text-blue-700"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
+                      }`}
                   >
                     <List className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setViewMode("grid")}
-                    className={`p-2 rounded-lg transition-colors ${
-                      viewMode === "grid"
+                    className={`p-2 rounded-lg transition-colors ${viewMode === "grid"
                         ? "bg-blue-100 text-blue-700"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
+                      }`}
                   >
                     <Grid3X3 className="w-4 h-4" />
                   </button>
@@ -1617,11 +1554,10 @@ const RepairList = () => {
                 <div className="flex flex-wrap gap-1 sm:gap-2">
                   <button
                     onClick={() => handleSort("created_at")}
-                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${
-                      sortField === "created_at"
+                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${sortField === "created_at"
                         ? "bg-blue-100 text-blue-700"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
+                      }`}
                   >
                     วันที่
                     {sortField === "created_at" &&
@@ -1633,11 +1569,10 @@ const RepairList = () => {
                   </button>
                   <button
                     onClick={() => handleSort("priority")}
-                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${
-                      sortField === "priority"
+                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${sortField === "priority"
                         ? "bg-blue-100 text-blue-700"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
+                      }`}
                   >
                     ความสำคัญ
                     {sortField === "priority" &&
@@ -1649,11 +1584,10 @@ const RepairList = () => {
                   </button>
                   <button
                     onClick={() => handleSort("status")}
-                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${
-                      sortField === "status"
+                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${sortField === "status"
                         ? "bg-blue-100 text-blue-700"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
+                      }`}
                   >
                     สถานะ
                     {sortField === "status" &&
@@ -1675,28 +1609,28 @@ const RepairList = () => {
               dateRangeFilter !== "all" ||
               searchTerm ||
               activeView !== "all") && (
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                <p className="text-xs sm:text-sm text-blue-800">
-                  <strong>ผลการกรอง:</strong> แสดง{" "}
-                  {filteredAndSortedRepairs.length.toLocaleString("th-TH")}{" "}
-                  รายการ จาก {getViewModeText(activeView)}{" "}
-                  {filteredRepairsByView.length.toLocaleString("th-TH")} รายการ
-                  {(filteredAndSortedRepairs.length !==
-                    filteredRepairsByView.length ||
-                    activeView !== "all") && (
-                    <button
-                      onClick={() => {
-                        clearAllFilters();
-                        setActiveView("all");
-                      }}
-                      className="ml-2 text-blue-600 hover:text-blue-800 underline"
-                    >
-                      แสดงทั้งหมด
-                    </button>
-                  )}
-                </p>
-              </div>
-            )}
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                  <p className="text-xs sm:text-sm text-blue-800">
+                    <strong>ผลการกรอง:</strong> แสดง{" "}
+                    {filteredAndSortedRepairs.length.toLocaleString("th-TH")}{" "}
+                    รายการ จาก {getViewModeText(activeView)}{" "}
+                    {filteredRepairsByView.length.toLocaleString("th-TH")} รายการ
+                    {(filteredAndSortedRepairs.length !==
+                      filteredRepairsByView.length ||
+                      activeView !== "all") && (
+                        <button
+                          onClick={() => {
+                            clearAllFilters();
+                            setActiveView("all");
+                          }}
+                          className="ml-2 text-blue-600 hover:text-blue-800 underline"
+                        >
+                          แสดงทั้งหมด
+                        </button>
+                      )}
+                  </p>
+                </div>
+              )}
           </div>
 
           {/* Content Area */}
@@ -1705,22 +1639,22 @@ const RepairList = () => {
               <AlertCircle className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-4" />
               <p className="text-sm sm:text-base text-gray-500 mb-2">
                 {searchTerm ||
+                  statusFilter !== "all" ||
+                  priorityFilter !== "all" ||
+                  categoryFilter !== "all" ||
+                  technicianFilter !== "all" ||
+                  dateRangeFilter !== "all"
+                  ? `ไม่พบรายการในหมวด "${getViewModeText(
+                    activeView
+                  )}" ที่ตรงกับเงื่อนไขการค้นหา`
+                  : `ไม่มีรายการใน "${getViewModeText(activeView)}"`}
+              </p>
+              {searchTerm ||
                 statusFilter !== "all" ||
                 priorityFilter !== "all" ||
                 categoryFilter !== "all" ||
                 technicianFilter !== "all" ||
-                dateRangeFilter !== "all"
-                  ? `ไม่พบรายการในหมวด "${getViewModeText(
-                      activeView
-                    )}" ที่ตรงกับเงื่อนไขการค้นหา`
-                  : `ไม่มีรายการใน "${getViewModeText(activeView)}"`}
-              </p>
-              {searchTerm ||
-              statusFilter !== "all" ||
-              priorityFilter !== "all" ||
-              categoryFilter !== "all" ||
-              technicianFilter !== "all" ||
-              dateRangeFilter !== "all" ? (
+                dateRangeFilter !== "all" ? (
                 <button
                   onClick={clearAllFilters}
                   className="inline-flex items-center mt-4 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -1913,11 +1847,10 @@ const RepairList = () => {
                           <button
                             key={page}
                             onClick={() => handlePageChange(page)}
-                            className={`px-3 py-2 text-sm rounded-lg ${
-                              page === currentPage
+                            className={`px-3 py-2 text-sm rounded-lg ${page === currentPage
                                 ? "bg-blue-600 text-white"
                                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                            }`}
+                              }`}
                           >
                             {page}
                           </button>

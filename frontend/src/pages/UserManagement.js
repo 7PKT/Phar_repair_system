@@ -100,7 +100,7 @@ const UserManagement = () => {
             setUsers(response.data || []);
         } catch (error) {
             console.error('Error fetching users:', error);
-            
+
             if (error.response?.status === 401) {
                 toast.error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
             } else if (error.response?.status === 403) {
@@ -315,7 +315,7 @@ const UserManagement = () => {
     const exportToExcel = () => {
         try {
             const exportData = filteredAndSortedUsers;
-            
+
             const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -393,12 +393,12 @@ const UserManagement = () => {
     <div class="header">
         <h1>👥 รายงานข้อมูลผู้ใช้</h1>
         <p>สร้างเมื่อ: ${new Date().toLocaleDateString('th-TH', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        })}</p>
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            })}</p>
         <p>ผู้ส่งออก: ${user?.full_name || user?.username || 'ไม่ระบุ'}</p>
     </div>
     
@@ -450,15 +450,15 @@ const UserManagement = () => {
                         <span class="role-${userData.role}">${getRoleText(userData.role)}</span>
                     </td>
                     <td class="nowrap center">${new Date(userData.created_at).toLocaleDateString('th-TH', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit'
-                    })}</td>
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            })}</td>
                     <td class="nowrap center">${userData.last_login ? new Date(userData.last_login).toLocaleDateString('th-TH', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit'
-                    }) : 'ไม่เคยเข้าสู่ระบบ'}</td>
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }) : 'ไม่เคยเข้าสู่ระบบ'}</td>
                     <td class="center">${userData.notification_enabled ? '✅ เปิด' : '❌ ปิด'}</td>
                 </tr>
             `).join('')}
@@ -472,18 +472,18 @@ const UserManagement = () => {
 </body>
 </html>`;
 
-            const blob = new Blob([htmlContent], { 
-                type: 'application/vnd.ms-excel;charset=utf-8' 
+            const blob = new Blob([htmlContent], {
+                type: 'application/vnd.ms-excel;charset=utf-8'
             });
-            
+
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
             link.setAttribute('href', url);
-            
+
             const fileName = `รายงานผู้ใช้_${new Date().toLocaleDateString('th-TH').replace(/\//g, '-')}.xls`;
             link.setAttribute('download', fileName);
             link.style.visibility = 'hidden';
-            
+
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -534,7 +534,7 @@ const UserManagement = () => {
     // ปรับปรุงการกรองให้ทำงานจริง
     const filteredUsers = users.filter(userData => {
         // Search filter
-        const matchesSearch = searchTerm === '' || 
+        const matchesSearch = searchTerm === '' ||
             userData.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             userData.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             userData.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -549,7 +549,7 @@ const UserManagement = () => {
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
             const isActive = userData.last_login && new Date(userData.last_login) > thirtyDaysAgo;
-            
+
             matchesStatus = statusFilter === 'active' ? isActive : !isActive;
         }
 
@@ -606,12 +606,12 @@ const UserManagement = () => {
                 <button
                     onClick={handleRefresh}
                     disabled={refreshing}
-                    className="flex items-center px-2 sm:px-3 py-2 text-xs sm:text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                    className="flex items-center px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50"
                 >
-                    <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} />
-                    <span className="hidden sm:inline">รีเฟรช</span>
+                    <RefreshCw className={`w-4 h-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} />
+                    รีเฟรช
                 </button>
-                
+
                 {filteredAndSortedUsers.length > 0 && (
                     <button
                         onClick={exportToExcel}
@@ -895,17 +895,16 @@ const UserManagement = () => {
                             <h3 className="text-lg font-semibold text-gray-900 mb-2 sm:mb-0">
                                 รายการผู้ใช้ ({filteredAndSortedUsers.length.toLocaleString('th-TH')})
                             </h3>
-                            
+
                             {/* Sort Options */}
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-sm text-gray-600">เรียงตาม:</span>
                                 <button
                                     onClick={() => handleSort('created_at')}
-                                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${
-                                        sortField === 'created_at' 
-                                            ? 'bg-blue-100 text-blue-700' 
+                                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${sortField === 'created_at'
+                                            ? 'bg-blue-100 text-blue-700'
                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
+                                        }`}
                                 >
                                     วันที่สมัคร
                                     {sortField === 'created_at' && (
@@ -914,11 +913,10 @@ const UserManagement = () => {
                                 </button>
                                 <button
                                     onClick={() => handleSort('role')}
-                                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${
-                                        sortField === 'role' 
-                                            ? 'bg-blue-100 text-blue-700' 
+                                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${sortField === 'role'
+                                            ? 'bg-blue-100 text-blue-700'
                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
+                                        }`}
                                 >
                                     บทบาท
                                     {sortField === 'role' && (
@@ -927,11 +925,10 @@ const UserManagement = () => {
                                 </button>
                                 <button
                                     onClick={() => handleSort('full_name')}
-                                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${
-                                        sortField === 'full_name' 
-                                            ? 'bg-blue-100 text-blue-700' 
+                                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${sortField === 'full_name'
+                                            ? 'bg-blue-100 text-blue-700'
                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
+                                        }`}
                                 >
                                     ชื่อ
                                     {sortField === 'full_name' && (
@@ -940,7 +937,7 @@ const UserManagement = () => {
                                 </button>
                             </div>
                         </div>
-                        
+
                         {/* Filter Summary */}
                         {(roleFilter !== 'all' || statusFilter !== 'all' || searchTerm) && (
                             <div className="mt-4 p-3 bg-blue-50 rounded-lg">
@@ -965,7 +962,7 @@ const UserManagement = () => {
                                 <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                 <p className="text-gray-500 mb-2">
                                     {searchTerm || roleFilter !== 'all' || statusFilter !== 'all'
-                                        ? 'ไม่พบผู้ใช้ที่ตรงกับเงื่อนไขการค้นหา' 
+                                        ? 'ไม่พบผู้ใช้ที่ตรงกับเงื่อนไขการค้นหา'
                                         : 'ไม่มีผู้ใช้ในระบบ'}
                                 </p>
                                 {searchTerm || roleFilter !== 'all' || statusFilter !== 'all' ? (
@@ -997,7 +994,7 @@ const UserManagement = () => {
                                             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-sm sm:text-lg font-bold flex-shrink-0">
                                                 {userData.full_name?.charAt(0) || userData.username?.charAt(0) || 'U'}
                                             </div>
-                                            
+
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 mb-2">
                                                     {getRoleIcon(userData.role)}
@@ -1037,7 +1034,7 @@ const UserManagement = () => {
                                                         </div>
                                                         <div className="flex items-center">
                                                             <UserCheck className="w-4 h-4 mr-2 flex-shrink-0" />
-                                                            <span className="text-xs sm:text-sm">เข้าล่าสุด: {userData.last_login ? 
+                                                            <span className="text-xs sm:text-sm">เข้าล่าสุด: {userData.last_login ?
                                                                 new Date(userData.last_login).toLocaleDateString('th-TH', {
                                                                     year: 'numeric',
                                                                     month: 'short',
@@ -1094,7 +1091,7 @@ const UserManagement = () => {
                                     >
                                         ก่อนหน้า
                                     </button>
-                                    
+
                                     {/* Mobile pagination - show fewer pages */}
                                     <div className="hidden sm:flex items-center space-x-2">
                                         {[...Array(totalPages)].map((_, index) => {
@@ -1108,11 +1105,10 @@ const UserManagement = () => {
                                                     <button
                                                         key={page}
                                                         onClick={() => handlePageChange(page)}
-                                                        className={`px-3 py-2 text-sm rounded-lg ${
-                                                            page === currentPage
+                                                        className={`px-3 py-2 text-sm rounded-lg ${page === currentPage
                                                                 ? 'bg-blue-600 text-white'
                                                                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {page}
                                                     </button>
@@ -1126,14 +1122,14 @@ const UserManagement = () => {
                                             return null;
                                         })}
                                     </div>
-                                    
+
                                     {/* Mobile pagination - simple current page display */}
                                     <div className="sm:hidden flex items-center px-3 py-2 bg-gray-100 rounded-lg">
                                         <span className="text-sm text-gray-600">
                                             {currentPage} / {totalPages}
                                         </span>
                                     </div>
-                                    
+
                                     <button
                                         onClick={() => handlePageChange(currentPage + 1)}
                                         disabled={currentPage === totalPages}
@@ -1177,10 +1173,9 @@ const UserManagement = () => {
                                     <input
                                         type="text"
                                         value={formData.username}
-                                        onChange={(e) => setFormData({...formData, username: e.target.value})}
-                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                            formErrors.username ? 'border-red-300' : 'border-gray-300'
-                                        }`}
+                                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.username ? 'border-red-300' : 'border-gray-300'
+                                            }`}
                                         placeholder="ชื่อผู้ใช้สำหรับเข้าสู่ระบบ"
                                     />
                                     {formErrors.username && (
@@ -1196,10 +1191,9 @@ const UserManagement = () => {
                                     <input
                                         type="email"
                                         value={formData.email}
-                                        onChange={(e) => setFormData({...formData, email: e.target.value})}
-                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                            formErrors.email ? 'border-red-300' : 'border-gray-300'
-                                        }`}
+                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.email ? 'border-red-300' : 'border-gray-300'
+                                            }`}
                                         placeholder="อีเมลของผู้ใช้"
                                     />
                                     {formErrors.email && (
@@ -1215,10 +1209,9 @@ const UserManagement = () => {
                                     <input
                                         type="text"
                                         value={formData.full_name}
-                                        onChange={(e) => setFormData({...formData, full_name: e.target.value})}
-                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                            formErrors.full_name ? 'border-red-300' : 'border-gray-300'
-                                        }`}
+                                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.full_name ? 'border-red-300' : 'border-gray-300'
+                                            }`}
                                         placeholder="ชื่อ-นามสกุลเต็ม"
                                     />
                                     {formErrors.full_name && (
@@ -1234,7 +1227,7 @@ const UserManagement = () => {
                                     <input
                                         type="tel"
                                         value={formData.phone}
-                                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                                         className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         placeholder="0xx-xxx-xxxx"
                                     />
@@ -1247,7 +1240,7 @@ const UserManagement = () => {
                                     </label>
                                     <select
                                         value={formData.role}
-                                        onChange={(e) => setFormData({...formData, role: e.target.value})}
+                                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                                         className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         <option value="user">ผู้ใช้งาน</option>
@@ -1264,10 +1257,9 @@ const UserManagement = () => {
                                     <input
                                         type="password"
                                         value={formData.password}
-                                        onChange={(e) => setFormData({...formData, password: e.target.value})}
-                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                            formErrors.password ? 'border-red-300' : 'border-gray-300'
-                                        }`}
+                                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.password ? 'border-red-300' : 'border-gray-300'
+                                            }`}
                                         placeholder="รหัสผ่านสำหรับเข้าสู่ระบบ"
                                     />
                                     {formErrors.password && (
@@ -1283,10 +1275,9 @@ const UserManagement = () => {
                                     <input
                                         type="password"
                                         value={formData.confirmPassword}
-                                        onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                            formErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-                                        }`}
+                                        onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                                            }`}
                                         placeholder="ยืนยันรหัสผ่าน"
                                     />
                                     {formErrors.confirmPassword && (
@@ -1304,7 +1295,7 @@ const UserManagement = () => {
                                     <input
                                         type="checkbox"
                                         checked={formData.notification_enabled}
-                                        onChange={(e) => setFormData({...formData, notification_enabled: e.target.checked})}
+                                        onChange={(e) => setFormData({ ...formData, notification_enabled: e.target.checked })}
                                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                     />
                                     <label className="ml-2 text-sm text-gray-900">
@@ -1369,10 +1360,9 @@ const UserManagement = () => {
                                     <input
                                         type="text"
                                         value={formData.username}
-                                        onChange={(e) => setFormData({...formData, username: e.target.value})}
-                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                            formErrors.username ? 'border-red-300' : 'border-gray-300'
-                                        }`}
+                                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.username ? 'border-red-300' : 'border-gray-300'
+                                            }`}
                                         placeholder="ชื่อผู้ใช้สำหรับเข้าสู่ระบบ"
                                     />
                                     {formErrors.username && (
@@ -1388,10 +1378,9 @@ const UserManagement = () => {
                                     <input
                                         type="email"
                                         value={formData.email}
-                                        onChange={(e) => setFormData({...formData, email: e.target.value})}
-                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                            formErrors.email ? 'border-red-300' : 'border-gray-300'
-                                        }`}
+                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.email ? 'border-red-300' : 'border-gray-300'
+                                            }`}
                                         placeholder="อีเมลของผู้ใช้"
                                     />
                                     {formErrors.email && (
@@ -1407,10 +1396,9 @@ const UserManagement = () => {
                                     <input
                                         type="text"
                                         value={formData.full_name}
-                                        onChange={(e) => setFormData({...formData, full_name: e.target.value})}
-                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                            formErrors.full_name ? 'border-red-300' : 'border-gray-300'
-                                        }`}
+                                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.full_name ? 'border-red-300' : 'border-gray-300'
+                                            }`}
                                         placeholder="ชื่อ-นามสกุลเต็ม"
                                     />
                                     {formErrors.full_name && (
@@ -1426,7 +1414,7 @@ const UserManagement = () => {
                                     <input
                                         type="tel"
                                         value={formData.phone}
-                                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                                         className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         placeholder="0xx-xxx-xxxx"
                                     />
@@ -1439,7 +1427,7 @@ const UserManagement = () => {
                                     </label>
                                     <select
                                         value={formData.role}
-                                        onChange={(e) => setFormData({...formData, role: e.target.value})}
+                                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                                         className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         disabled={selectedUser.id === 1} // ป้องกันการเปลี่ยน role ของ admin หลัก
                                     >
@@ -1462,7 +1450,7 @@ const UserManagement = () => {
                                     <input
                                         type="checkbox"
                                         checked={formData.notification_enabled}
-                                        onChange={(e) => setFormData({...formData, notification_enabled: e.target.checked})}
+                                        onChange={(e) => setFormData({ ...formData, notification_enabled: e.target.checked })}
                                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                     />
                                     <label className="ml-2 text-sm text-gray-900">
@@ -1483,10 +1471,9 @@ const UserManagement = () => {
                                         <input
                                             type="password"
                                             value={formData.password}
-                                            onChange={(e) => setFormData({...formData, password: e.target.value})}
-                                            className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                                formErrors.password ? 'border-red-300' : 'border-gray-300'
-                                            }`}
+                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                            className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.password ? 'border-red-300' : 'border-gray-300'
+                                                }`}
                                             placeholder="ใส่รหัสผ่านใหม่หากต้องการเปลี่ยน"
                                         />
                                         {formErrors.password && (
@@ -1503,10 +1490,9 @@ const UserManagement = () => {
                                         <input
                                             type="password"
                                             value={formData.confirmPassword}
-                                            onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-                                            className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                                formErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-                                            }`}
+                                            onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                            className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                                                }`}
                                             placeholder="ยืนยันรหัสผ่านใหม่"
                                         />
                                         {formErrors.confirmPassword && (

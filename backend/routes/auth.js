@@ -6,19 +6,16 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Register
 router.post('/register', async (req, res) => {
     try {
         const { email, password, full_name, username, phone } = req.body;
 
-        // ตรวจสอบข้อมูลที่จำเป็น
         if (!email || !password || !full_name || !username) {
             return res.status(400).json({ 
                 message: 'กรุณากรอกข้อมูลที่จำเป็น: อีเมล, รหัสผ่าน, ชื่อ-นามสกุล, ชื่อผู้ใช้' 
             });
         }
 
-        // ตรวจสอบว่า email ซ้ำหรือไม่
         const [existingUsers] = await db.execute(
             'SELECT id FROM users WHERE email = ? OR username = ?',
             [email, username]
@@ -27,11 +24,8 @@ router.post('/register', async (req, res) => {
         if (existingUsers.length > 0) {
             return res.status(400).json({ message: 'อีเมลหรือชื่อผู้ใช้นี้ถูกใช้งานแล้ว' });
         }
-
-        // เข้ารหัสรหัสผ่าน
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // บันทึกผู้ใช้ใหม่
         const [result] = await db.execute(
             'INSERT INTO users (email, password, full_name, username, phone, role) VALUES (?, ?, ?, ?, ?, ?)',
             [email, hashedPassword, full_name, username, phone || null, 'user']
@@ -50,11 +44,8 @@ router.post('/register', async (req, res) => {
 // Login
 router.post('/login', async (req, res) => {
     try {
-        // รับทั้ง email และ username (เพื่อรองรับทั้งสองแบบ)
         const { email, username, password } = req.body;
-        
-        // ถ้า frontend ส่งมาเป็น username ให้ใช้ username
-        // ถ้า frontend ส่งมาเป็น email ให้ใช้ email
+
         const loginIdentifier = email || username;
 
         console.log('🔐 Login attempt with:', { 
