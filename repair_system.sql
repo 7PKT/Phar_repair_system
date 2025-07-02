@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jun 29, 2025 at 04:09 PM
+-- Generation Time: Jul 02, 2025 at 05:22 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -48,6 +48,21 @@ INSERT INTO `categories` (`id`, `name`, `description`, `created_at`) VALUES
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `completion_images`
+--
+
+CREATE TABLE `completion_images` (
+  `id` int(11) NOT NULL,
+  `repair_request_id` int(11) NOT NULL,
+  `file_path` varchar(500) NOT NULL,
+  `file_name` varchar(255) NOT NULL,
+  `file_size` int(11) DEFAULT 0,
+  `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `repair_images`
 --
 
@@ -73,7 +88,7 @@ CREATE TABLE `repair_requests` (
   `category_id` int(11) DEFAULT NULL,
   `location` varchar(200) NOT NULL,
   `priority` enum('low','medium','high','urgent') DEFAULT 'medium',
-  `status` enum('pending','in_progress','completed','cancelled') DEFAULT 'pending',
+  `status` enum('pending','assigned','in_progress','completed','cancelled') DEFAULT 'pending',
   `completion_details` text DEFAULT NULL,
   `requester_id` int(11) NOT NULL,
   `assigned_to` int(11) DEFAULT NULL,
@@ -96,7 +111,8 @@ CREATE TABLE `status_history` (
   `new_status` enum('pending','assigned','in_progress','completed','cancelled') DEFAULT NULL,
   `notes` text DEFAULT NULL,
   `updated_by` int(11) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `completion_images` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`completion_images`))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -123,9 +139,9 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `email`, `password`, `full_name`, `phone`, `role`, `created_at`, `updated_at`, `last_login`) VALUES
-(1, 'admin', 'admin@test.com', '$2a$12$EOFs0oTrfco3FmL08W4OAugoQSzdO7OSj4KETgCNwSvP/.3dvy7fG', 'Admin', NULL, 'admin', '2025-06-19 06:22:38', '2025-06-29 14:08:40', '2025-06-29 14:08:25'),
-(2, 'tech', 'Tech@test.com', '$2b$10$D4HF.6Spv4Rnk2.WqYaFXuFOsSjUb61dLdVQh.uGnxT8LMexYUiNO', 'Tech', NULL, 'technician', '2025-06-24 07:36:31', '2025-06-29 14:09:01', '2025-06-24 07:36:55'),
-(3, 'user', 'user@test.com', '$2a$12$g7vG8PhLhXKptRaQmJ7ZEOUMUX.H0hnhSIKkM5JqWZ3quOsMLcCVW', 'User', NULL, 'user', '2025-06-19 06:22:38', '2025-06-29 14:08:49', '2025-06-24 07:14:34');
+(1, 'admin', 'admin@test.com', '$2b$10$9wzrqtrGA185wB14FZBSturfKIQpCHGUDvuYQXMP8O0lkqLFTMV8q', 'Admin', NULL, 'admin', '2025-06-19 06:22:38', '2025-07-02 03:11:33', '2025-07-02 03:11:33'),
+(2, 'tech', 'Tech@test.com', '$2b$10$D4HF.6Spv4Rnk2.WqYaFXuFOsSjUb61dLdVQh.uGnxT8LMexYUiNO', 'Tech', NULL, 'technician', '2025-06-24 07:36:31', '2025-07-02 03:16:26', '2025-07-02 03:16:26'),
+(3, 'user', 'user@test.com', '$2a$12$g7vG8PhLhXKptRaQmJ7ZEOUMUX.H0hnhSIKkM5JqWZ3quOsMLcCVW', 'User', NULL, 'user', '2025-06-19 06:22:38', '2025-06-30 07:43:34', '2025-06-30 07:43:34');
 
 --
 -- Indexes for dumped tables
@@ -136,6 +152,13 @@ INSERT INTO `users` (`id`, `username`, `email`, `password`, `full_name`, `phone`
 --
 ALTER TABLE `categories`
   ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `completion_images`
+--
+ALTER TABLE `completion_images`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `repair_request_id` (`repair_request_id`);
 
 --
 -- Indexes for table `repair_images`
@@ -180,32 +203,44 @@ ALTER TABLE `categories`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
+-- AUTO_INCREMENT for table `completion_images`
+--
+ALTER TABLE `completion_images`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `repair_images`
 --
 ALTER TABLE `repair_images`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `repair_requests`
 --
 ALTER TABLE `repair_requests`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `status_history`
 --
 ALTER TABLE `status_history`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=45;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=94;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- Constraints for dumped tables
 --
+
+--
+-- Constraints for table `completion_images`
+--
+ALTER TABLE `completion_images`
+  ADD CONSTRAINT `completion_images_ibfk_1` FOREIGN KEY (`repair_request_id`) REFERENCES `repair_requests` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `repair_images`
