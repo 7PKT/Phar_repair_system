@@ -1,3 +1,4 @@
+// App.js (Updated with system-settings route)
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
@@ -10,6 +11,7 @@ import RepairForm from './pages/RepairForm';
 import RepairDetail from './pages/RepairDetail';
 import RepairEdit from './pages/RepairEdit';
 import UserManagement from './pages/UserManagement';
+import SystemSettings from './pages/SystemSettings';
 import './index.css';
 
 // Protected Route Component
@@ -160,6 +162,24 @@ function App() {
             <Route path="/admin/users" element={
               <AdminRoute>
                 <UserManagement />
+              </AdminRoute>
+            } />
+
+            <Route path="/admin/settings" element={
+              <AdminRoute>
+                <SystemSettings />
+              </AdminRoute>
+            } />
+
+            <Route path="/settings" element={
+              <AdminRoute>
+                <SystemSettings />
+              </AdminRoute>
+            } />
+
+            <Route path="/system-settings" element={
+              <AdminRoute>
+                <SystemSettings />
               </AdminRoute>
             } />
 

@@ -8,7 +8,8 @@ import {
   FileText, 
   User, 
   BarChart3,
-  Users
+  Users,
+  Settings
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -40,7 +41,12 @@ const Sidebar = () => {
       icon: Users,
       roles: ['admin']
     },
-
+    {
+      name: 'ตั้งค่าระบบ',
+      href: '/admin/settings',
+      icon: Settings,
+      roles: ['admin']
+    },
     {
       name: 'จัดการโปรไฟล์',
       href: '/profile',
@@ -67,6 +73,9 @@ const Sidebar = () => {
       
       case '/admin/users':
         return location.pathname.startsWith('/admin/users');
+      
+      case '/admin/settings':
+        return location.pathname.startsWith('/admin/settings');
       
       default:
         return false;

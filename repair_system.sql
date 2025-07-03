@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jul 02, 2025 at 05:22 AM
+-- Generation Time: Jul 03, 2025 at 06:32 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -118,6 +118,40 @@ CREATE TABLE `status_history` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `system_settings`
+--
+
+CREATE TABLE `system_settings` (
+  `id` int(11) NOT NULL,
+  `setting_key` varchar(100) NOT NULL,
+  `setting_value` text DEFAULT NULL,
+  `setting_type` enum('string','number','boolean','json') DEFAULT 'string',
+  `description` text DEFAULT NULL,
+  `is_sensitive` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `system_settings`
+--
+
+INSERT INTO `system_settings` (`id`, `setting_key`, `setting_value`, `setting_type`, `description`, `is_sensitive`, `created_at`, `updated_at`) VALUES
+(1, 'line_channel_access_token', 'bkIG1WDD83IHJKua7Ayeh+5r2XfJywrCGkJzYn/xdPj3hGslOetmPXKtVKkoLDS1YSxacNSaA3KmwY1VD0qLSDSVrA4KLzklDhW0ZvATF5+eDVtu9fcaHWu+E+8lotC30WvJ1J9rBN+w19QWovINSAdB04t89/1O/w1cDnyilFU=', 'string', 'LINE Channel Access Token สำหรับส่งข้อความ', 1, '2025-07-02 04:18:43', '2025-07-02 09:24:53'),
+(2, 'line_channel_secret', '4f29a2a6361743a51f88d346e497b50e', 'string', 'LINE Channel Secret สำหรับยืนยันตัวตน', 1, '2025-07-02 04:18:43', '2025-07-02 09:24:53'),
+(3, 'line_group_id', 'C8a6a7f9b1438f91ed4ef9721d2c0cd2a', 'string', 'LINE Group ID หรือ Room ID สำหรับส่งแจ้งเตือน', 0, '2025-07-02 04:18:43', '2025-07-02 09:24:53'),
+(4, 'line_notifications_enabled', 'true', 'boolean', 'เปิด/ปิดการแจ้งเตือนผ่าน LINE', 0, '2025-07-02 04:18:43', '2025-07-02 09:24:53'),
+(5, 'line_webhook_url', '', 'string', 'URL สำหรับรับ Webhook จาก LINE', 0, '2025-07-02 04:18:43', '2025-07-02 09:24:53'),
+(6, 'system_name', 'ระบบแจ้งซ่อม', 'string', 'ชื่อระบบ', 0, '2025-07-02 04:18:43', '2025-07-02 09:24:53'),
+(7, 'admin_email', '', 'string', 'อีเมลผู้ดูแลระบบ', 0, '2025-07-02 04:18:43', '2025-07-02 09:24:53'),
+(8, 'notification_new_repair', 'true', 'boolean', 'แจ้งเตือนเมื่อมีการแจ้งซ่อมใหม่', 0, '2025-07-02 04:18:43', '2025-07-02 09:24:53'),
+(9, 'notification_status_update', 'true', 'boolean', 'แจ้งเตือนเมื่อมีการอัพเดทสถานะ', 0, '2025-07-02 04:18:43', '2025-07-02 09:24:53'),
+(10, 'max_image_size_mb', '5', 'number', 'ขนาดไฟล์รูปภาพสูงสุด (MB)', 0, '2025-07-02 04:18:43', '2025-07-02 09:24:53'),
+(11, 'max_images_per_request', '50', 'number', 'จำนวนรูปภาพสูงสุดต่อการแจ้งซ่อม', 0, '2025-07-02 04:18:43', '2025-07-02 09:24:53');
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `users`
 --
 
@@ -139,8 +173,8 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `email`, `password`, `full_name`, `phone`, `role`, `created_at`, `updated_at`, `last_login`) VALUES
-(1, 'admin', 'admin@test.com', '$2b$10$9wzrqtrGA185wB14FZBSturfKIQpCHGUDvuYQXMP8O0lkqLFTMV8q', 'Admin', NULL, 'admin', '2025-06-19 06:22:38', '2025-07-02 03:11:33', '2025-07-02 03:11:33'),
-(2, 'tech', 'Tech@test.com', '$2b$10$D4HF.6Spv4Rnk2.WqYaFXuFOsSjUb61dLdVQh.uGnxT8LMexYUiNO', 'Tech', NULL, 'technician', '2025-06-24 07:36:31', '2025-07-02 03:16:26', '2025-07-02 03:16:26'),
+(1, 'admin', 'admin@test.com', '$2b$10$9wzrqtrGA185wB14FZBSturfKIQpCHGUDvuYQXMP8O0lkqLFTMV8q', 'Admin', NULL, 'admin', '2025-06-19 06:22:38', '2025-07-03 03:33:00', '2025-07-03 03:33:00'),
+(2, 'tech', 'Tech@test.com', '$2b$10$wuWgRwX0R03wK4FC3bTTEumQLXVZ6G5adra/BDq1833U8DR/J2sNe', 'Tech', '1233445566', 'technician', '2025-06-24 07:36:31', '2025-07-02 03:25:19', '2025-07-02 03:25:19'),
 (3, 'user', 'user@test.com', '$2a$12$g7vG8PhLhXKptRaQmJ7ZEOUMUX.H0hnhSIKkM5JqWZ3quOsMLcCVW', 'User', NULL, 'user', '2025-06-19 06:22:38', '2025-06-30 07:43:34', '2025-06-30 07:43:34');
 
 --
@@ -174,7 +208,10 @@ ALTER TABLE `repair_requests`
   ADD PRIMARY KEY (`id`),
   ADD KEY `category_id` (`category_id`),
   ADD KEY `requester_id` (`requester_id`),
-  ADD KEY `assigned_to` (`assigned_to`);
+  ADD KEY `assigned_to` (`assigned_to`),
+  ADD KEY `idx_status` (`status`),
+  ADD KEY `idx_priority` (`priority`),
+  ADD KEY `idx_created_at` (`created_at`);
 
 --
 -- Indexes for table `status_history`
@@ -185,12 +222,21 @@ ALTER TABLE `status_history`
   ADD KEY `updated_by` (`updated_by`);
 
 --
+-- Indexes for table `system_settings`
+--
+ALTER TABLE `system_settings`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `setting_key` (`setting_key`),
+  ADD KEY `idx_setting_key` (`setting_key`);
+
+--
 -- Indexes for table `users`
 --
 ALTER TABLE `users`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `username` (`username`),
-  ADD UNIQUE KEY `email` (`email`);
+  ADD UNIQUE KEY `email` (`email`),
+  ADD KEY `idx_role` (`role`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -227,6 +273,12 @@ ALTER TABLE `status_history`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `system_settings`
+--
+ALTER TABLE `system_settings`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=533;
+
+--
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
@@ -254,14 +306,14 @@ ALTER TABLE `repair_images`
 ALTER TABLE `repair_requests`
   ADD CONSTRAINT `repair_requests_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`),
   ADD CONSTRAINT `repair_requests_ibfk_2` FOREIGN KEY (`requester_id`) REFERENCES `users` (`id`),
-  ADD CONSTRAINT `repair_requests_ibfk_3` FOREIGN KEY (`assigned_to`) REFERENCES `users` (`id`);
+  ADD CONSTRAINT `repair_requests_ibfk_3` FOREIGN KEY (`assigned_to`) REFERENCES `users` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `status_history`
 --
 ALTER TABLE `status_history`
-  ADD CONSTRAINT `status_history_ibfk_1` FOREIGN KEY (`repair_request_id`) REFERENCES `repair_requests` (`id`),
-  ADD CONSTRAINT `status_history_ibfk_2` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`);
+  ADD CONSTRAINT `status_history_ibfk_1` FOREIGN KEY (`repair_request_id`) REFERENCES `repair_requests` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `status_history_ibfk_2` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

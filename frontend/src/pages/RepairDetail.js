@@ -460,17 +460,6 @@ const RepairDetail = () => {
                 ดาวน์โหลดรูป
               </button>
             )}
-
-            <button
-              onClick={() => {
-                shareRepair();
-                setShowActions(false);
-              }}
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center text-gray-600"
-            >
-              <Share2 className="w-4 h-4 mr-2" />
-              แชร์
-            </button>
           </div>
         )}
       </div>
@@ -518,15 +507,6 @@ const RepairDetail = () => {
           ดาวน์โหลดรูป
         </TouchButton>
       )}
-
-      <TouchButton
-        onClick={shareRepair}
-        variant="ghost"
-        size="sm"
-      >
-        <Share2 className="w-4 h-4 mr-2" />
-        แชร์
-      </TouchButton>
     </div>
   );
 

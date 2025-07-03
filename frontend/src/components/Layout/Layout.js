@@ -1,4 +1,3 @@
-// components/Layout/Layout.js
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -145,6 +144,19 @@ const Layout = ({ children, title, headerContent }) => {
       }
     },
     {
+      name: 'ตั้งค่าระบบ',
+      href: '/admin/settings',
+      icon: Settings,
+      roles: ['admin'],
+      action: () => {
+        if (user?.role === 'admin') {
+          handleNavigation('/admin/settings');
+        } else {
+          toast.error('ไม่มีสิทธิ์เข้าถึงหน้านี้');
+        }
+      }
+    },
+    {
       name: 'จัดการโปรไฟล์',
       href: '/profile',
       icon: User,
@@ -165,6 +177,8 @@ const Layout = ({ children, title, headerContent }) => {
         return location.pathname === '/profile';
       case '/admin/users':
         return location.pathname.startsWith('/admin/users');
+      case '/admin/settings':
+        return location.pathname.startsWith('/admin/settings');
       default:
         return false;
     }
