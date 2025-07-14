@@ -586,27 +586,7 @@ class LineMessaging {
                         contents: [
                             {
                                 type: 'text',
-                                text: 'สถานะเดิม:',
-                                color: '#666666',
-                                size: 'xs',
-                                flex: 3
-                            },
-                            {
-                                type: 'text',
-                                text: statusTexts[oldStatus] || oldStatus,
-                                size: 'xs',
-                                flex: 4
-                            }
-                        ]
-                    },
-                    {
-                        type: 'box',
-                        layout: 'baseline',
-                        spacing: 'sm',
-                        contents: [
-                            {
-                                type: 'text',
-                                text: 'สถานะใหม่:',
+                                text: 'สถานะ:',
                                 color: '#666666',
                                 size: 'xs',
                                 flex: 3
@@ -688,7 +668,7 @@ class LineMessaging {
             });
         }
 
-        const flexMessage = this.createFlexMessage('📊 อัพเดทสถานะ', content, color);
+        const flexMessage = this.createFlexMessage('📊 เสร็จสิ้น', content, color);
         const messages = [flexMessage];
 
         // ✅ แสดงรูปภาพเสร็จสิ้นถ้าเปลี่ยนเป็นเสร็จสิ้น

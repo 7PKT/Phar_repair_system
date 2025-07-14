@@ -1,4 +1,4 @@
-// services/repairService.js (แก้ไข import path + assigned_to_name)
+// services/repairService.js (แก้ไข import path + assigned_to_name + ส่ง LINE เฉพาะเมื่อเสร็จสิ้น)
 const db = require('../config/database');
 const imageService = require('./imageService');
 // ✅ แก้ไข path การ import LINE Messaging
@@ -184,71 +184,8 @@ class RepairService {
             await connection.commit();
             console.log(`✅ Repair created successfully with ID: ${repairId}`);
 
-            // ✅ ส่งการแจ้งเตือน LINE หลังจากบันทึกสำเร็จ
-            try {
-                console.log('🔔 Preparing LINE notification for new repair...');
-                
-                // ✅ แก้ไข SQL query ให้ดึง assigned_to_name ด้วย
-                const [repairDetail] = await connection.execute(`
-                    SELECT 
-                        r.*,
-                        c.name as category_name,
-                        u1.full_name as requester_name,
-                        u2.full_name as assigned_to_name
-                    FROM repair_requests r
-                    LEFT JOIN categories c ON r.category_id = c.id
-                    LEFT JOIN users u1 ON r.requester_id = u1.id
-                    LEFT JOIN users u2 ON r.assigned_to = u2.id
-                    WHERE r.id = ?
-                `, [repairId]);
-
-                if (repairDetail.length > 0) {
-                    const notificationData = {
-                        ...repairDetail[0],
-                        imageCount: images ? images.length : 0
-                    };
-
-                    console.log('📤 Notification data:', {
-                        id: notificationData.id,
-                        title: notificationData.title,
-                        requester_name: notificationData.requester_name,
-                        assigned_to_name: notificationData.assigned_to_name,
-                        location: notificationData.location,
-                        priority: notificationData.priority,
-                        imageCount: notificationData.imageCount
-                    });
-
-                    // ส่งการแจ้งเตือนแบบ async
-                    setImmediate(async () => {
-                        try {
-                            await lineMessaging.refreshConfig(); // รีเฟรชการตั้งค่าก่อน
-                            
-                            if (lineMessaging.isEnabled()) {
-                                console.log('📱 Sending LINE notification...');
-                                const result = await lineMessaging.notifyNewRepairRequest(notificationData);
-                                
-                                if (result.success) {
-                                    console.log(`✅ LINE notification sent successfully for repair ID: ${repairId}`);
-                                } else {
-                                    console.error(`❌ Failed to send LINE notification for repair ID: ${repairId}`, result.error);
-                                }
-                            } else {
-                                console.log('⚠️ LINE notifications disabled or not configured properly');
-                                console.log('   - Configured:', lineMessaging.isConfigured());
-                                console.log('   - Enabled:', lineMessaging.isEnabled());
-                                console.log('   - Has Token:', !!lineMessaging.channelAccessToken);
-                                console.log('   - Has Group ID:', !!lineMessaging.groupId);
-                            }
-                        } catch (lineError) {
-                            console.error('❌ LINE notification error:', lineError);
-                        }
-                    });
-                } else {
-                    console.error('❌ Could not find repair details for notification');
-                }
-            } catch (notifyError) {
-                console.error('❌ Error preparing LINE notification:', notifyError);
-            }
+            // ❌ ลบการส่งการแจ้งเตือน LINE เมื่อสร้างใหม่
+            console.log('📝 Repair created - No LINE notification sent (only send when completed)');
 
             return {
                 id: repairId,
@@ -435,69 +372,73 @@ class RepairService {
             await connection.commit();
             console.log(`✅ Repair status updated: ${repairId} (${oldStatus} -> ${status})`);
 
-            // ✅ ส่งการแจ้งเตือน LINE หลังจากอัปเดตสถานะสำเร็จ
-            try {
-                console.log('🔔 Preparing LINE notification for status update...');
-                
-                // ✅ แก้ไข SQL query ให้ดึง assigned_to_name ด้วย
-                const [repairDetail] = await connection.execute(`
-                    SELECT 
-                        r.*,
-                        c.name as category_name,
-                        u1.full_name as requester_name,
-                        u2.full_name as assigned_to_name,
-                        u3.full_name as updated_by_name
-                    FROM repair_requests r
-                    LEFT JOIN categories c ON r.category_id = c.id
-                    LEFT JOIN users u1 ON r.requester_id = u1.id
-                    LEFT JOIN users u2 ON r.assigned_to = u2.id
-                    LEFT JOIN users u3 ON u3.id = ?
-                    WHERE r.id = ?
-                `, [updated_by, repairId]);
+            // ✅ ส่งการแจ้งเตือน LINE เฉพาะเมื่อเปลี่ยนสถานะเป็น "completed" เท่านั้น
+            if (status === 'completed') {
+                try {
+                    console.log('🔔 Preparing LINE notification for completion...');
+                    
+                    // ✅ แก้ไข SQL query ให้ดึง assigned_to_name ด้วย
+                    const [repairDetail] = await connection.execute(`
+                        SELECT 
+                            r.*,
+                            c.name as category_name,
+                            u1.full_name as requester_name,
+                            u2.full_name as assigned_to_name,
+                            u3.full_name as updated_by_name
+                        FROM repair_requests r
+                        LEFT JOIN categories c ON r.category_id = c.id
+                        LEFT JOIN users u1 ON r.requester_id = u1.id
+                        LEFT JOIN users u2 ON r.assigned_to = u2.id
+                        LEFT JOIN users u3 ON u3.id = ?
+                        WHERE r.id = ?
+                    `, [updated_by, repairId]);
 
-                if (repairDetail.length > 0) {
-                    const notificationData = repairDetail[0];
+                    if (repairDetail.length > 0) {
+                        const notificationData = repairDetail[0];
 
-                    console.log('📤 Status notification data:', {
-                        id: notificationData.id,
-                        title: notificationData.title,
-                        assigned_to_name: notificationData.assigned_to_name,
-                        oldStatus: oldStatus,
-                        newStatus: status,
-                        updated_by_name: notificationData.updated_by_name
-                    });
+                        console.log('📤 Completion notification data:', {
+                            id: notificationData.id,
+                            title: notificationData.title,
+                            assigned_to_name: notificationData.assigned_to_name,
+                            oldStatus: oldStatus,
+                            newStatus: status,
+                            updated_by_name: notificationData.updated_by_name
+                        });
 
-                    // ส่งการแจ้งเตือนแบบ async
-                    setImmediate(async () => {
-                        try {
-                            await lineMessaging.refreshConfig(); // รีเฟรชการตั้งค่าก่อน
-                            
-                            if (lineMessaging.isEnabled()) {
-                                console.log('📱 Sending LINE status notification...');
-                                const result = await lineMessaging.notifyStatusUpdate(
-                                    notificationData, 
-                                    oldStatus, 
-                                    status, 
-                                    notificationData.updated_by_name || 'ไม่ระบุ'
-                                );
+                        // ส่งการแจ้งเตือนแบบ async
+                        setImmediate(async () => {
+                            try {
+                                await lineMessaging.refreshConfig(); // รีเฟรชการตั้งค่าก่อน
                                 
-                                if (result.success) {
-                                    console.log(`✅ LINE status notification sent successfully for repair ID: ${repairId}`);
+                                if (lineMessaging.isEnabled()) {
+                                    console.log('📱 Sending LINE completion notification...');
+                                    const result = await lineMessaging.notifyStatusUpdate(
+                                        notificationData, 
+                                        oldStatus, 
+                                        status, 
+                                        notificationData.updated_by_name || 'ไม่ระบุ'
+                                    );
+                                    
+                                    if (result.success) {
+                                        console.log(`✅ LINE completion notification sent successfully for repair ID: ${repairId}`);
+                                    } else {
+                                        console.error(`❌ Failed to send LINE completion notification for repair ID: ${repairId}`, result.error);
+                                    }
                                 } else {
-                                    console.error(`❌ Failed to send LINE status notification for repair ID: ${repairId}`, result.error);
+                                    console.log('⚠️ LINE notifications disabled or not configured properly');
                                 }
-                            } else {
-                                console.log('⚠️ LINE notifications disabled or not configured properly');
+                            } catch (lineError) {
+                                console.error('❌ LINE completion notification error:', lineError);
                             }
-                        } catch (lineError) {
-                            console.error('❌ LINE status notification error:', lineError);
-                        }
-                    });
-                } else {
-                    console.error('❌ Could not find repair details for status notification');
+                        });
+                    } else {
+                        console.error('❌ Could not find repair details for completion notification');
+                    }
+                } catch (notifyError) {
+                    console.error('❌ Error preparing LINE completion notification:', notifyError);
                 }
-            } catch (notifyError) {
-                console.error('❌ Error preparing LINE status notification:', notifyError);
+            } else {
+                console.log(`📝 Status updated to "${status}" - No LINE notification sent (only send when completed)`);
             }
 
         } catch (error) {
