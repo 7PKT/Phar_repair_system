@@ -53,36 +53,33 @@ const RepairList = () => {
   const [technicians, setTechnicians] = useState([]);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [viewMode, setViewMode] = useState("list"); // 'list' or 'grid'
+  const [viewMode, setViewMode] = useState("list");
   const [isMobile, setIsMobile] = useState(false);
-  const [activeView, setActiveView] = useState("active"); // 'active', 'completed', 'all'
+  const [activeView, setActiveView] = useState("active");
 
   // ตรวจจับขนาดหน้าจอ
   useEffect(() => {
     const checkScreenSize = () => {
       setIsMobile(window.innerWidth < 768);
     };
-
     checkScreenSize();
     window.addEventListener("resize", checkScreenSize);
     return () => window.removeEventListener("resize", checkScreenSize);
   }, []);
 
   useEffect(() => {
-    fetchRepairs();
-    fetchCategories();
-    fetchTechnicians();
-  }, []);
+    // รอให้ user data พร้อมก่อน
+    if (user && user.id && user.role) {
+      fetchRepairs();
+      fetchCategories();
+      fetchTechnicians();
+    }
+  }, [user]);
 
-  useEffect(() => {
-    fetchRepairs();
-  }, [
-    statusFilter,
-    priorityFilter,
-    categoryFilter,
-    technicianFilter,
-    dateRangeFilter,
-  ]);
+  // ไม่ต้อง fetch ใหม่เมื่อ filter เปลี่ยน เพราะเราจะกรองใน frontend
+  // useEffect(() => {
+  //   fetchRepairs();
+  // }, [statusFilter, priorityFilter, categoryFilter, technicianFilter, dateRangeFilter]);
 
   const fetchCategories = async () => {
     try {
@@ -99,7 +96,6 @@ const RepairList = () => {
   const fetchTechnicians = async () => {
     try {
       const token = localStorage.getItem("token");
-
       let response;
       try {
         response = await axios.get("/api/repairs/technicians", {
@@ -112,7 +108,6 @@ const RepairList = () => {
         });
         console.log("✅ Successfully fetched users from admin endpoint");
       }
-
       const techUsers = response.data.filter(
         (u) => u.role === "technician" || u.role === "admin"
       );
@@ -133,6 +128,12 @@ const RepairList = () => {
         return;
       }
 
+      // ตรวจสอบว่า user data พร้อมใช้งานแล้วหรือไม่
+      if (!user || !user.id || !user.role) {
+        console.log("User data not ready, skipping fetch");
+        return;
+      }
+
       const response = await axios.get("/api/repairs", {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -145,10 +146,35 @@ const RepairList = () => {
       console.log("User role:", user?.role);
       console.log("User ID:", user?.id);
 
-      setRepairs(repairsData);
+      // กรองข้อมูลตาม role ของผู้ใช้
+      let filteredRepairs = [];
+
+      if (user.role === "user") {
+        // user เห็นเฉพาะรายการที่ตนเองแจ้งซ่อม - ตรวจสอบทั้ง requester_id และ user_id
+        filteredRepairs = repairsData.filter(repair => {
+          const isOwner = repair.requester_id === user.id || 
+                         repair.user_id === user.id ||
+                         repair.created_by === user.id;
+          
+          console.log(`Repair ${repair.id}: requester_id=${repair.requester_id}, user_id=${repair.user_id}, created_by=${repair.created_by}, current_user_id=${user.id}, isOwner=${isOwner}`);
+          return isOwner;
+        });
+        console.log("Filtered repairs for user:", filteredRepairs);
+        console.log(`User ${user.id} can see ${filteredRepairs.length} out of ${repairsData.length} repairs`);
+      } else if (user.role === "technician") {
+        // technician เห็นเฉพาะรายการที่ได้รับมอบหมายแล้ว (ไม่เห็นรายการ pending ที่ยังไม่มีคนรับ)
+        filteredRepairs = repairsData.filter(repair => repair.assigned_to === user.id);
+        console.log("Filtered repairs for technician:", filteredRepairs);
+        console.log(`Technician ${user.id} can see ${filteredRepairs.length} assigned repairs out of ${repairsData.length} total repairs`);
+      } else if (user.role === "admin") {
+        // admin เห็นรายการทั้งหมด
+        filteredRepairs = repairsData;
+        console.log("All repairs for admin:", filteredRepairs);
+      }
+
+      setRepairs(filteredRepairs);
     } catch (error) {
       console.error("Error fetching repairs:", error);
-
       if (error.response?.status === 401) {
         toast.error("Session หมดอายุ กรุณาเข้าสู่ระบบใหม่");
       } else if (error.response?.status === 403) {
@@ -190,47 +216,20 @@ const RepairList = () => {
     setShowMobileFilters(false);
   };
 
-  // ฟังก์ชันสำหรับย้ายรายการไป category เสร็จสิ้น
-  const moveToCompletedCategory = async (repairId) => {
-    try {
-      const token = localStorage.getItem("token");
-
-      // หา category เสร็จสิ้น หรือสร้างใหม่ถ้าไม่มี
-      let completedCategory = categories.find(
-        (cat) =>
-          cat.name.toLowerCase().includes("เสร็จสิ้น") ||
-          cat.name.toLowerCase().includes("completed")
-      );
-
-      if (!completedCategory) {
-        // สร้าง category เสร็จสิ้นใหม่
-        const categoryResponse = await axios.post(
-          "/api/repairs/categories",
-          { name: "เสร็จสิ้น", description: "รายการซ่อมที่เสร็จสิ้นแล้ว" },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        completedCategory = categoryResponse.data;
-        setCategories((prev) => [...prev, completedCategory]);
-      }
-
-      // อัพเดท repair ให้ไปอยู่ใน category เสร็จสิ้น
-      await axios.put(
-        `/api/repairs/${repairId}`,
-        { category_id: completedCategory.id },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      toast.success("ย้ายรายการไป category เสร็จสิ้นเรียบร้อย");
-      fetchRepairs(); // รีเฟรชข้อมูล
-    } catch (error) {
-      console.error("Error moving to completed category:", error);
-      toast.error("เกิดข้อผิดพลาดในการย้าย category");
-    }
-  };
-
   const exportToExcel = () => {
     try {
       const exportData = filteredAndSortedRepairs;
+      const roleText = user?.role === "admin" 
+        ? "ผู้ดูแลระบบ" 
+        : user?.role === "technician" 
+          ? "ช่างเทคนิค" 
+          : "ผู้ใช้งาน";
+
+      const titlePrefix = user?.role === "admin" 
+        ? "รายงานการแจ้งซ่อมทั้งหมด" 
+        : user?.role === "technician" 
+          ? "รายงานการแจ้งซ่อมที่รับผิดชอบ" 
+          : "รายงานการแจ้งซ่อมของฉัน";
 
       const htmlContent = `
 <!DOCTYPE html>
@@ -239,123 +238,37 @@ const RepairList = () => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { 
-            font-family: 'Tahoma', sans-serif; 
-            margin: 10px; 
-            line-height: 1.4;
-            font-size: 12px;
-        }
-        .header { 
-            text-align: center; 
-            margin-bottom: 20px; 
-            padding: 15px;
-            border-bottom: 2px solid #2563eb;
-        }
-        .header h1 { 
-            color: #2563eb; 
-            margin: 0; 
-            font-size: 18px; 
-        }
-        .header p { 
-            color: #6b7280; 
-            margin: 3px 0; 
-            font-size: 11px;
-        }
-        
-        .summary { 
-            background-color: #f8fafc; 
-            border: 1px solid #e2e8f0; 
-            border-radius: 6px; 
-            padding: 12px; 
-            margin-bottom: 15px; 
-        }
-        .summary h3 { 
-            margin: 0 0 8px 0; 
-            color: #1e40af; 
-            font-size: 14px;
-        }
-        .summary-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
-            gap: 8px; 
-        }
-        .summary-item { 
-            background: white; 
-            padding: 8px; 
-            border-radius: 4px; 
-            border-left: 3px solid #3b82f6; 
-            font-size: 11px;
-        }
-        
-        table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 15px; 
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            font-size: 11px;
-        }
-        
-        th { 
-            background-color: #1e40af; 
-            color: white; 
-            padding: 8px 6px; 
-            text-align: left; 
-            font-weight: bold; 
-            border: 1px solid #1e40af;
-            font-size: 10px;
-        }
-        
-        td { 
-            padding: 6px 4px; 
-            border: 1px solid #e5e7eb; 
-            vertical-align: top;
-            font-size: 10px;
-        }
-        
+        body { font-family: 'Tahoma', sans-serif; margin: 10px; line-height: 1.4; font-size: 12px; }
+        .header { text-align: center; margin-bottom: 20px; padding: 15px; border-bottom: 2px solid #2563eb; }
+        .header h1 { color: #2563eb; margin: 0; font-size: 18px; }
+        .header p { color: #6b7280; margin: 3px 0; font-size: 11px; }
+        .summary { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 15px; }
+        .summary h3 { margin: 0 0 8px 0; color: #1e40af; font-size: 14px; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+        .summary-item { background: white; padding: 8px; border-radius: 4px; border-left: 3px solid #3b82f6; font-size: 11px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; }
+        th { background-color: #1e40af; color: white; padding: 8px 6px; text-align: left; font-weight: bold; border: 1px solid #1e40af; font-size: 10px; }
+        td { padding: 6px 4px; border: 1px solid #e5e7eb; vertical-align: top; font-size: 10px; }
         tr:nth-child(even) { background-color: #f9fafb; }
         tr:hover { background-color: #eff6ff; }
-        
         .status-pending { background-color: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; }
         .status-assigned { background-color: #e0e7ff; color: #5b21b6; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; }
         .status-in_progress { background-color: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; }
         .status-completed { background-color: #d1fae5; color: #065f46; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; }
         .status-cancelled { background-color: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; }
-        
         .priority-urgent { background-color: #fecaca; color: #991b1b; padding: 1px 4px; border-radius: 2px; font-size: 8px; font-weight: bold; }
         .priority-high { background-color: #fed7aa; color: #c2410c; padding: 1px 4px; border-radius: 2px; font-size: 8px; font-weight: bold; }
         .priority-medium { background-color: #fef3c7; color: #a16207; padding: 1px 4px; border-radius: 2px; font-size: 8px; font-weight: bold; }
         .priority-low { background-color: #f3f4f6; color: #4b5563; padding: 1px 4px; border-radius: 2px; font-size: 8px; font-weight: bold; }
-        
         .description { max-width: 200px; word-wrap: break-word; line-height: 1.3; }
         .nowrap { white-space: nowrap; }
         .center { text-align: center; }
-        
-        .footer { 
-            margin-top: 20px; 
-            padding-top: 15px; 
-            border-top: 1px solid #e5e7eb; 
-            text-align: center; 
-            color: #6b7280; 
-            font-size: 10px; 
-        }
-
-        @media print {
-            body { margin: 0; font-size: 10px; }
-            .header { page-break-after: avoid; }
-            table { page-break-inside: auto; }
-            tr { page-break-inside: avoid; page-break-after: auto; }
-        }
-
-        @media screen and (max-width: 768px) {
-            .summary-grid { grid-template-columns: repeat(2, 1fr); }
-            table { font-size: 9px; }
-            th, td { padding: 4px 2px; }
-        }
+        .footer { margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 10px; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>📋 รายงานการแจ้งซ่อม (${getViewModeText(activeView)})</h1>
+        <h1>📋 ${titlePrefix} (${getViewModeText(activeView)})</h1>
         <p>สร้างเมื่อ: ${new Date().toLocaleDateString("th-TH", {
         year: "numeric",
         month: "long",
@@ -363,12 +276,7 @@ const RepairList = () => {
         hour: "2-digit",
         minute: "2-digit",
       })}</p>
-        <p>ผู้ส่งออก: ${user?.full_name || user?.username || "ไม่ระบุ"} (${user?.role === "admin"
-          ? "ผู้ดูแลระบบ"
-          : user?.role === "technician"
-            ? "ช่างเทคนิค"
-            : "ผู้ใช้งาน"
-        })</p>
+        <p>ผู้ส่งออก: ${user?.full_name || user?.username || "ไม่ระบุ"} (${roleText})</p>
     </div>
     
     <div class="summary">
@@ -384,31 +292,12 @@ const RepairList = () => {
             </div>
             <div class="summary-item">
                 <strong>กำลังดำเนินการ:</strong><br>
-                ${(
-          getFilteredCount("assigned") + getFilteredCount("in_progress")
-        ).toLocaleString("th-TH")} รายการ
+                ${(getFilteredCount("assigned") + getFilteredCount("in_progress")).toLocaleString("th-TH")} รายการ
             </div>
             <div class="summary-item">
                 <strong>เสร็จสิ้นแล้ว:</strong><br>
                 ${getFilteredCount("completed").toLocaleString("th-TH")} รายการ
             </div>
-        </div>
-        
-        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 10px;">
-            <strong>🔍 ตัวกรองที่ใช้:</strong>
-            ประเภท: ${getViewModeText(activeView)}, 
-            สถานะ: ${statusFilter === "all" ? "ทั้งหมด" : getStatusText(statusFilter)
-        }, 
-            ความสำคัญ: ${priorityFilter === "all"
-          ? "ทั้งหมด"
-          : getPriorityText(priorityFilter)
-        }, 
-            หมวดหมู่: ${categoryFilter === "all"
-          ? "ทั้งหมด"
-          : categories.find((c) => c.id == categoryFilter)?.name ||
-          "ไม่ระบุ"
-        }, 
-            ช่วงเวลา: ${getDateRangeText(dateRangeFilter)}
         </div>
     </div>
     
@@ -430,71 +319,41 @@ const RepairList = () => {
             </tr>
         </thead>
         <tbody>
-            ${exportData
-          .map(
-            (repair) => `
+            ${exportData.map((repair) => `
                 <tr>
-                    <td class="nowrap center">REP-${repair.id
-                .toString()
-                .padStart(5, "0")}</td>
-                    <td><strong>${(repair.title || "")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")}</strong></td>
-                    <td class="description">${(repair.description || "")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .substring(0, 100)}${repair.description?.length > 100 ? "..." : ""
-              }</td>
-                    <td class="center">
-                        <span class="status-${repair.status}">${getStatusText(
-                repair.status
-              )}</span>
-                    </td>
-                    <td class="center">
-                        <span class="priority-${repair.priority
-              }">${getPriorityText(repair.priority)}</span>
-                    </td>
-                    <td>${(repair.location || "")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")}</td>
+                    <td class="nowrap center">REP-${repair.id.toString().padStart(5, "0")}</td>
+                    <td><strong>${(repair.title || "").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</strong></td>
+                    <td class="description">${(repair.description || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").substring(0, 100)}${repair.description?.length > 100 ? "..." : ""}</td>
+                    <td class="center"><span class="status-${repair.status}">${getStatusText(repair.status)}</span></td>
+                    <td class="center"><span class="priority-${repair.priority}">${getPriorityText(repair.priority)}</span></td>
+                    <td>${(repair.location || "").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
                     <td class="center">${repair.category_name || "ไม่ระบุ"}</td>
                     <td>${repair.requester_name || "ไม่ระบุ"}</td>
-                    <td class="center">${repair.assigned_name || "<em>ยังไม่มอบหมาย</em>"
-              }</td>
-                    <td class="nowrap center">${new Date(
-                repair.created_at
-              ).toLocaleDateString("th-TH", {
+                    <td class="center">${repair.assigned_name || "<em>ยังไม่มอบหมาย</em>"}</td>
+                    <td class="nowrap center">${new Date(repair.created_at).toLocaleDateString("th-TH", {
                 year: "numeric",
                 month: "2-digit",
                 day: "2-digit",
               })}</td>
-                    <td class="nowrap center">${repair.completed_at
-                ? new Date(repair.completed_at).toLocaleDateString(
-                  "th-TH",
-                  {
-                    year: "numeric",
-                    month: "2-digit",
-                    day: "2-digit",
-                  }
-                )
-                : "-"
-              }</td>
+                    <td class="nowrap center">${repair.completed_at ? new Date(repair.completed_at).toLocaleDateString("th-TH", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              }) : "-"}</td>
                     <td class="center">${repair.image_path ? "✅" : "❌"}</td>
                 </tr>
-            `
-          )
-          .join("")}
+            `).join("")}
         </tbody>
     </table>
     
     <div class="footer">
-        <p>📄 รายงานนี้สร้างโดยระบบแจ้งซ่อม | รวม ${exportData.length.toLocaleString(
-            "th-TH"
-          )} รายการ</p>
+        <p>📄 รายงานนี้สร้างโดยระบบแจ้งซ่อม | รวม ${exportData.length.toLocaleString("th-TH")} รายการ</p>
         <p>สร้างเมื่อ: ${new Date().toLocaleString("th-TH")}</p>
-        <p><strong>หมายเหตุ:</strong> ข้อมูลนี้แสดงรายการแจ้งซ่อม${getViewModeText(
-            activeView
-          )}ในระบบ</p>
+        <p><strong>หมายเหตุ:</strong> ข้อมูลนี้แสดงรายการแจ้งซ่อม${getViewModeText(activeView)}ที่ ${user?.role === "admin" 
+            ? "ทั้งหมดในระบบ" 
+            : user?.role === "technician" 
+              ? "ได้รับมอบหมาย" 
+              : "ของฉัน"}</p>
     </div>
 </body>
 </html>`;
@@ -507,9 +366,7 @@ const RepairList = () => {
       const url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
 
-      const fileName = `รายงานการแจ้งซ่อม_${getViewModeText(
-        activeView
-      )}_${new Date().toLocaleDateString("th-TH").replace(/\//g, "-")}.xls`;
+      const fileName = `${titlePrefix}_${getViewModeText(activeView)}_${new Date().toLocaleDateString("th-TH").replace(/\//g, "-")}.xls`;
       link.setAttribute("download", fileName);
       link.style.visibility = "hidden";
 
@@ -613,12 +470,21 @@ const RepairList = () => {
     if (user?.role === "admin" || user?.role === "technician") {
       return true;
     }
-
     if (user?.role === "user") {
       return repair.requester_id === user.id && repair.status === "pending";
     }
-
     return false;
+  };
+
+  // แสดง title ที่เหมาะสมตาม role
+  const getPageTitle = () => {
+    if (user?.role === "admin") {
+      return "รายการแจ้งซ่อมทั้งหมด";
+    } else if (user?.role === "technician") {
+      return "รายการแจ้งซ่อมที่รับผิดชอบ";
+    } else {
+      return "รายการแจ้งซ่อมของฉัน";
+    }
   };
 
   // Filter repairs by view mode
@@ -628,7 +494,7 @@ const RepairList = () => {
     } else if (activeView === "completed") {
       return repair.status === "completed" || repair.status === "cancelled";
     }
-    return true; // 'all' view
+    return true;
   });
 
   const filteredRepairs = filteredRepairsByView.filter((repair) => {
@@ -641,12 +507,9 @@ const RepairList = () => {
       repair.category_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       repair.assigned_name?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus =
-      statusFilter === "all" || repair.status === statusFilter;
-    const matchesPriority =
-      priorityFilter === "all" || repair.priority === priorityFilter;
-    const matchesCategory =
-      categoryFilter === "all" || repair.category_id == categoryFilter;
+    const matchesStatus = statusFilter === "all" || repair.status === statusFilter;
+    const matchesPriority = priorityFilter === "all" || repair.priority === priorityFilter;
+    const matchesCategory = categoryFilter === "all" || repair.category_id == categoryFilter;
 
     let matchesTechnician = true;
     if (technicianFilter !== "all") {
@@ -665,11 +528,7 @@ const RepairList = () => {
 
       switch (dateRangeFilter) {
         case "today":
-          startDate = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate()
-          );
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           matchesDateRange = repairDate >= startDate;
           break;
         case "week":
@@ -711,13 +570,7 @@ const RepairList = () => {
         bValue = priorityOrder[b.priority] || 0;
         break;
       case "status":
-        const statusOrder = {
-          pending: 1,
-          assigned: 2,
-          in_progress: 3,
-          completed: 4,
-          cancelled: 5,
-        };
+        const statusOrder = { pending: 1, assigned: 2, in_progress: 3, completed: 4, cancelled: 5 };
         aValue = statusOrder[a.status] || 0;
         bValue = statusOrder[b.status] || 0;
         break;
@@ -764,8 +617,7 @@ const RepairList = () => {
           className="flex items-center px-2 sm:px-3 py-2 text-xs sm:text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
         >
           <RefreshCw
-            className={`w-3 h-3 sm:w-4 sm:h-4 ${isMobile ? "" : "mr-1"} ${refreshing ? "animate-spin" : ""
-              }`}
+            className={`w-3 h-3 sm:w-4 sm:h-4 ${isMobile ? "" : "mr-1"} ${refreshing ? "animate-spin" : ""}`}
           />
           {!isMobile && "รีเฟรช"}
         </button>
@@ -819,19 +671,21 @@ const RepairList = () => {
       <div className="flex items-center space-x-1">
         <button
           onClick={() => setViewMode("list")}
-          className={`p-2 rounded-lg transition-colors ${viewMode === "list"
+          className={`p-2 rounded-lg transition-colors ${
+            viewMode === "list"
               ? "bg-blue-100 text-blue-700"
               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+          }`}
         >
           <List className="w-4 h-4" />
         </button>
         <button
           onClick={() => setViewMode("grid")}
-          className={`p-2 rounded-lg transition-colors ${viewMode === "grid"
+          className={`p-2 rounded-lg transition-colors ${
+            viewMode === "grid"
               ? "bg-blue-100 text-blue-700"
               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+          }`}
         >
           <Grid3X3 className="w-4 h-4" />
         </button>
@@ -849,13 +703,11 @@ const RepairList = () => {
 
   if (loading) {
     return (
-      <Layout title="รายการแจ้งซ่อม">
+      <Layout title={getPageTitle()}>
         <div className="flex items-center justify-center h-32 sm:h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 text-sm sm:text-base">
-              กำลังโหลดข้อมูล...
-            </p>
+            <p className="text-gray-600 text-sm sm:text-base">กำลังโหลดข้อมูล...</p>
           </div>
         </div>
       </Layout>
@@ -869,18 +721,14 @@ const RepairList = () => {
         <div className="flex items-center space-x-2">
           {getStatusIcon(repair.status)}
           <span
-            className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusBadge(
-              repair.status
-            )}`}
+            className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusBadge(repair.status)}`}
           >
             {getStatusText(repair.status)}
           </span>
         </div>
         <div className="flex items-center space-x-1">
           <span
-            className={`px-2 py-1 text-xs font-medium rounded-full border ${getPriorityBadge(
-              repair.priority
-            )}`}
+            className={`px-2 py-1 text-xs font-medium rounded-full border ${getPriorityBadge(repair.priority)}`}
           >
             {getPriorityText(repair.priority)}
           </span>
@@ -911,9 +759,7 @@ const RepairList = () => {
         {repair.assigned_name && (
           <div className="flex items-center text-xs sm:text-sm text-blue-600">
             <User className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
-            <span className="truncate">
-              ผู้รับผิดชอบ: {repair.assigned_name}
-            </span>
+            <span className="truncate">ผู้รับผิดชอบ: {repair.assigned_name}</span>
           </div>
         )}
       </div>
@@ -937,20 +783,18 @@ const RepairList = () => {
           </Link>
         )}
 
-        {user?.role === "user" &&
-          !canEdit(repair) &&
-          repair.requester_id === user.id && (
-            <span className="flex items-center justify-center px-3 py-2 text-xs bg-gray-100 text-gray-500 rounded-lg">
-              🔒 ไม่สามารถแก้ไขได้
-            </span>
-          )}
+        {user?.role === "user" && !canEdit(repair) && repair.requester_id === user.id && (
+          <span className="flex items-center justify-center px-3 py-2 text-xs bg-gray-100 text-gray-500 rounded-lg">
+            🔒 ไม่สามารถแก้ไขได้
+          </span>
+        )}
       </div>
     </div>
   );
 
   return (
     <Layout
-      title="รายการแจ้งซ่อม"
+      title={getPageTitle()}
       headerContent={isMobile ? mobileHeaderContent : desktopHeaderContent}
     >
       <div className="space-y-4 sm:space-y-6">
@@ -958,18 +802,17 @@ const RepairList = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center space-x-1">
-              <span className="text-sm font-medium text-gray-700 mr-3">
-                แสดงรายการ:
-              </span>
+              <span className="text-sm font-medium text-gray-700 mr-3">แสดงรายการ:</span>
               <button
                 onClick={() => {
                   setActiveView("active");
                   setCurrentPage(1);
                 }}
-                className={`px-4 py-2 text-sm rounded-lg transition-colors ${activeView === "active"
+                className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                  activeView === "active"
                     ? "bg-blue-600 text-white"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
+                }`}
               >
                 <AlertCircle className="w-4 h-4 mr-1 inline" />
                 รายการที่ยังดำเนินการ
@@ -979,10 +822,11 @@ const RepairList = () => {
                   setActiveView("completed");
                   setCurrentPage(1);
                 }}
-                className={`px-4 py-2 text-sm rounded-lg transition-colors ${activeView === "completed"
+                className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                  activeView === "completed"
                     ? "bg-green-600 text-white"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
+                }`}
               >
                 <Archive className="w-4 h-4 mr-1 inline" />
                 รายการที่เสร็จสิ้นแล้ว
@@ -992,10 +836,11 @@ const RepairList = () => {
                   setActiveView("all");
                   setCurrentPage(1);
                 }}
-                className={`px-4 py-2 text-sm rounded-lg transition-colors ${activeView === "all"
+                className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                  activeView === "all"
                     ? "bg-purple-600 text-white"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
+                }`}
               >
                 <List className="w-4 h-4 mr-1 inline" />
                 ทั้งหมด
@@ -1027,9 +872,7 @@ const RepairList = () => {
               <div className="space-y-4">
                 {/* Search */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ค้นหา
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">ค้นหา</label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <input
@@ -1047,9 +890,7 @@ const RepairList = () => {
 
                 {/* Status Filter */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    สถานะ
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">สถานะ</label>
                   <select
                     value={statusFilter}
                     onChange={(e) => {
@@ -1069,9 +910,7 @@ const RepairList = () => {
 
                 {/* Priority Filter */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ความสำคัญ
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">ความสำคัญ</label>
                   <select
                     value={priorityFilter}
                     onChange={(e) => {
@@ -1090,9 +929,7 @@ const RepairList = () => {
 
                 {/* Category Filter */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    หมวดหมู่
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">หมวดหมู่</label>
                   <select
                     value={categoryFilter}
                     onChange={(e) => {
@@ -1112,9 +949,7 @@ const RepairList = () => {
 
                 {/* Date Range Filter */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ช่วงเวลา
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">ช่วงเวลา</label>
                   <select
                     value={dateRangeFilter}
                     onChange={(e) => {
@@ -1131,29 +966,28 @@ const RepairList = () => {
                   </select>
                 </div>
 
-                {/* Technician Filter */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ผู้รับผิดชอบ
-                  </label>
-                  <select
-                    value={technicianFilter}
-                    onChange={(e) => {
-                      setTechnicianFilter(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="all">ทุกคน</option>
-                    <option value="unassigned">ยังไม่มอบหมาย</option>
-                    {technicians.map((tech) => (
-                      <option key={tech.id} value={tech.id}>
-                        {tech.full_name} (
-                        {tech.role === "admin" ? "แอดมิน" : "ช่างเทคนิค"})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* Technician Filter - แสดงเฉพาะสำหรับ admin และ technician */}
+                {(user?.role === "admin" || user?.role === "technician") && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">ผู้รับผิดชอบ</label>
+                    <select
+                      value={technicianFilter}
+                      onChange={(e) => {
+                        setTechnicianFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="all">ทุกคน</option>
+                      <option value="unassigned">ยังไม่มอบหมาย</option>
+                      {technicians.map((tech) => (
+                        <option key={tech.id} value={tech.id}>
+                          {tech.full_name} ({tech.role === "admin" ? "แอดมิน" : "ช่างเทคนิค"})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="flex gap-2 pt-4">
                   <button
@@ -1186,9 +1020,7 @@ const RepairList = () => {
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                 className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
               >
-                {showAdvancedFilters
-                  ? "ซ่อนตัวกรองเพิ่มเติม"
-                  : "แสดงตัวกรองเพิ่มเติม"}
+                {showAdvancedFilters ? "ซ่อนตัวกรองเพิ่มเติม" : "แสดงตัวกรองเพิ่มเติม"}
               </button>
               <button
                 onClick={clearAllFilters}
@@ -1298,35 +1130,32 @@ const RepairList = () => {
           {showAdvancedFilters && (
             <div className="border-t pt-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Technician Filter */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ผู้รับผิดชอบ
-                  </label>
-                  <select
-                    value={technicianFilter}
-                    onChange={(e) => {
-                      setTechnicianFilter(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="all">ทุกคน</option>
-                    <option value="unassigned">ยังไม่มอบหมาย</option>
-                    {technicians.map((tech) => (
-                      <option key={tech.id} value={tech.id}>
-                        {tech.full_name} (
-                        {tech.role === "admin" ? "แอดมิน" : "ช่างเทคนิค"})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* Technician Filter - แสดงเฉพาะสำหรับ admin และ technician */}
+                {(user?.role === "admin" || user?.role === "technician") && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">ผู้รับผิดชอบ</label>
+                    <select
+                      value={technicianFilter}
+                      onChange={(e) => {
+                        setTechnicianFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="all">ทุกคน</option>
+                      <option value="unassigned">ยังไม่มอบหมาย</option>
+                      {technicians.map((tech) => (
+                        <option key={tech.id} value={tech.id}>
+                          {tech.full_name} ({tech.role === "admin" ? "แอดมิน" : "ช่างเทคนิค"})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Active Filters Display */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ตัวกรองที่ใช้งาน
-                  </label>
+                <div className={`${(user?.role === "admin" || user?.role === "technician") ? "md:col-span-2" : "md:col-span-3"}`}>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">ตัวกรองที่ใช้งาน</label>
                   <div className="flex flex-wrap gap-2">
                     {activeView !== "all" && (
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
@@ -1363,8 +1192,7 @@ const RepairList = () => {
                     )}
                     {categoryFilter !== "all" && (
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                        หมวดหมู่:{" "}
-                        {categories.find((c) => c.id == categoryFilter)?.name}
+                        หมวดหมู่: {categories.find((c) => c.id == categoryFilter)?.name}
                         <button
                           onClick={() => setCategoryFilter("all")}
                           className="ml-1 text-purple-600 hover:text-purple-800"
@@ -1375,11 +1203,7 @@ const RepairList = () => {
                     )}
                     {technicianFilter !== "all" && (
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        ช่าง:{" "}
-                        {technicianFilter === "unassigned"
-                          ? "ยังไม่มอบหมาย"
-                          : technicians.find((t) => t.id == technicianFilter)
-                            ?.full_name}
+                        ช่าง: {technicianFilter === "unassigned" ? "ยังไม่มอบหมาย" : technicians.find((t) => t.id == technicianFilter)?.full_name}
                         <button
                           onClick={() => setTechnicianFilter("all")}
                           className="ml-1 text-green-600 hover:text-green-800"
@@ -1425,14 +1249,9 @@ const RepairList = () => {
                 <Clock className="w-4 h-4 sm:w-6 sm:h-6 text-orange-600" />
               </div>
               <div className="ml-2 sm:ml-4">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">
-                  รอดำเนินการ
-                </p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">รอดำเนินการ</p>
                 <p className="text-lg sm:text-2xl font-bold text-gray-900">
-                  {
-                    filteredRepairsByView.filter((r) => r.status === "pending")
-                      .length
-                  }
+                  {filteredRepairsByView.filter((r) => r.status === "pending").length}
                 </p>
               </div>
             </div>
@@ -1444,14 +1263,9 @@ const RepairList = () => {
                 <User className="w-4 h-4 sm:w-6 sm:h-6 text-purple-600" />
               </div>
               <div className="ml-2 sm:ml-4">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">
-                  มอบหมายแล้ว
-                </p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">มอบหมายแล้ว</p>
                 <p className="text-lg sm:text-2xl font-bold text-gray-900">
-                  {
-                    filteredRepairsByView.filter((r) => r.status === "assigned")
-                      .length
-                  }
+                  {filteredRepairsByView.filter((r) => r.status === "assigned").length}
                 </p>
               </div>
             </div>
@@ -1463,15 +1277,9 @@ const RepairList = () => {
                 <AlertCircle className="w-4 h-4 sm:w-6 sm:h-6 text-blue-600" />
               </div>
               <div className="ml-2 sm:ml-4">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">
-                  กำลังดำเนินการ
-                </p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">กำลังดำเนินการ</p>
                 <p className="text-lg sm:text-2xl font-bold text-gray-900">
-                  {
-                    filteredRepairsByView.filter(
-                      (r) => r.status === "in_progress"
-                    ).length
-                  }
+                  {filteredRepairsByView.filter((r) => r.status === "in_progress").length}
                 </p>
               </div>
             </div>
@@ -1483,15 +1291,9 @@ const RepairList = () => {
                 <CheckCircle className="w-4 h-4 sm:w-6 sm:h-6 text-green-600" />
               </div>
               <div className="ml-2 sm:ml-4">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">
-                  เสร็จสิ้น
-                </p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">เสร็จสิ้น</p>
                 <p className="text-lg sm:text-2xl font-bold text-gray-900">
-                  {
-                    filteredRepairsByView.filter(
-                      (r) => r.status === "completed"
-                    ).length
-                  }
+                  {filteredRepairsByView.filter((r) => r.status === "completed").length}
                 </p>
               </div>
             </div>
@@ -1503,12 +1305,8 @@ const RepairList = () => {
                 <AlertCircle className="w-4 h-4 sm:w-6 sm:h-6 text-gray-600" />
               </div>
               <div className="ml-2 sm:ml-4">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">
-                  {getViewModeText(activeView)}
-                </p>
-                <p className="text-lg sm:text-2xl font-bold text-gray-900">
-                  {filteredRepairsByView.length}
-                </p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">{getViewModeText(activeView)}</p>
+                <p className="text-lg sm:text-2xl font-bold text-gray-900">{filteredRepairsByView.length}</p>
               </div>
             </div>
           </div>
@@ -1520,26 +1318,23 @@ const RepairList = () => {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h3 className="text-base sm:text-lg font-semibold text-gray-900">
-                  {getViewModeText(activeView)} (
-                  {filteredAndSortedRepairs.length.toLocaleString("th-TH")})
+                  {getViewModeText(activeView)} ({filteredAndSortedRepairs.length.toLocaleString("th-TH")})
                 </h3>
                 {/* Mobile View Mode Toggle */}
                 <div className="md:hidden flex items-center space-x-1 mt-2">
                   <button
                     onClick={() => setViewMode("list")}
-                    className={`p-2 rounded-lg transition-colors ${viewMode === "list"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
+                    className={`p-2 rounded-lg transition-colors ${
+                      viewMode === "list" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
                   >
                     <List className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setViewMode("grid")}
-                    className={`p-2 rounded-lg transition-colors ${viewMode === "grid"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
+                    className={`p-2 rounded-lg transition-colors ${
+                      viewMode === "grid" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
                   >
                     <Grid3X3 className="w-4 h-4" />
                   </button>
@@ -1548,16 +1343,13 @@ const RepairList = () => {
 
               {/* Sort Options */}
               <div className="flex items-center space-x-2">
-                <span className="text-xs sm:text-sm text-gray-600">
-                  เรียงตาม:
-                </span>
+                <span className="text-xs sm:text-sm text-gray-600">เรียงตาม:</span>
                 <div className="flex flex-wrap gap-1 sm:gap-2">
                   <button
                     onClick={() => handleSort("created_at")}
-                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${sortField === "created_at"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
+                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${
+                      sortField === "created_at" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
                   >
                     วันที่
                     {sortField === "created_at" &&
@@ -1569,10 +1361,9 @@ const RepairList = () => {
                   </button>
                   <button
                     onClick={() => handleSort("priority")}
-                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${sortField === "priority"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
+                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${
+                      sortField === "priority" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
                   >
                     ความสำคัญ
                     {sortField === "priority" &&
@@ -1584,10 +1375,9 @@ const RepairList = () => {
                   </button>
                   <button
                     onClick={() => handleSort("status")}
-                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${sortField === "status"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
+                    className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${
+                      sortField === "status" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
                   >
                     สถานะ
                     {sortField === "status" &&
@@ -1609,28 +1399,24 @@ const RepairList = () => {
               dateRangeFilter !== "all" ||
               searchTerm ||
               activeView !== "all") && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                  <p className="text-xs sm:text-sm text-blue-800">
-                    <strong>ผลการกรอง:</strong> แสดง{" "}
-                    {filteredAndSortedRepairs.length.toLocaleString("th-TH")}{" "}
-                    รายการ จาก {getViewModeText(activeView)}{" "}
-                    {filteredRepairsByView.length.toLocaleString("th-TH")} รายการ
-                    {(filteredAndSortedRepairs.length !==
-                      filteredRepairsByView.length ||
-                      activeView !== "all") && (
-                        <button
-                          onClick={() => {
-                            clearAllFilters();
-                            setActiveView("all");
-                          }}
-                          className="ml-2 text-blue-600 hover:text-blue-800 underline"
-                        >
-                          แสดงทั้งหมด
-                        </button>
-                      )}
-                  </p>
-                </div>
-              )}
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p className="text-xs sm:text-sm text-blue-800">
+                  <strong>ผลการกรอง:</strong> แสดง {filteredAndSortedRepairs.length.toLocaleString("th-TH")} รายการ จาก{" "}
+                  {getViewModeText(activeView)} {filteredRepairsByView.length.toLocaleString("th-TH")} รายการ
+                  {(filteredAndSortedRepairs.length !== filteredRepairsByView.length || activeView !== "all") && (
+                    <button
+                      onClick={() => {
+                        clearAllFilters();
+                        setActiveView("all");
+                      }}
+                      className="ml-2 text-blue-600 hover:text-blue-800 underline"
+                    >
+                      แสดงทั้งหมด
+                    </button>
+                  )}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Content Area */}
@@ -1639,22 +1425,20 @@ const RepairList = () => {
               <AlertCircle className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-4" />
               <p className="text-sm sm:text-base text-gray-500 mb-2">
                 {searchTerm ||
-                  statusFilter !== "all" ||
-                  priorityFilter !== "all" ||
-                  categoryFilter !== "all" ||
-                  technicianFilter !== "all" ||
-                  dateRangeFilter !== "all"
-                  ? `ไม่พบรายการในหมวด "${getViewModeText(
-                    activeView
-                  )}" ที่ตรงกับเงื่อนไขการค้นหา`
-                  : `ไม่มีรายการใน "${getViewModeText(activeView)}"`}
-              </p>
-              {searchTerm ||
                 statusFilter !== "all" ||
                 priorityFilter !== "all" ||
                 categoryFilter !== "all" ||
                 technicianFilter !== "all" ||
-                dateRangeFilter !== "all" ? (
+                dateRangeFilter !== "all"
+                  ? `ไม่พบรายการในหมวด "${getViewModeText(activeView)}" ที่ตรงกับเงื่อนไขการค้นหา`
+                  : `ไม่มีรายการใน "${getViewModeText(activeView)}"`}
+              </p>
+              {searchTerm ||
+              statusFilter !== "all" ||
+              priorityFilter !== "all" ||
+              categoryFilter !== "all" ||
+              technicianFilter !== "all" ||
+              dateRangeFilter !== "all" ? (
                 <button
                   onClick={clearAllFilters}
                   className="inline-flex items-center mt-4 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -1687,10 +1471,7 @@ const RepairList = () => {
                 /* List View */
                 <div className="divide-y divide-gray-200">
                   {currentRepairs.map((repair) => (
-                    <div
-                      key={repair.id}
-                      className="p-4 sm:p-6 hover:bg-gray-50 transition-colors"
-                    >
+                    <div key={repair.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center space-x-2 mb-2 flex-wrap gap-1">
@@ -1699,16 +1480,12 @@ const RepairList = () => {
                               {repair.title}
                             </h4>
                             <span
-                              className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusBadge(
-                                repair.status
-                              )}`}
+                              className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusBadge(repair.status)}`}
                             >
                               {getStatusText(repair.status)}
                             </span>
                             <span
-                              className={`px-2 py-1 text-xs font-medium rounded-full border ${getPriorityBadge(
-                                repair.priority
-                              )}`}
+                              className={`px-2 py-1 text-xs font-medium rounded-full border ${getPriorityBadge(repair.priority)}`}
                             >
                               {getPriorityText(repair.priority)}
                             </span>
@@ -1727,46 +1504,33 @@ const RepairList = () => {
                           <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500">
                             <div className="flex items-center min-w-0">
                               <MapPin className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
-                              <span className="truncate">
-                                {repair.location}
-                              </span>
+                              <span className="truncate">{repair.location}</span>
                             </div>
                             {repair.category_name && (
                               <div className="flex items-center">
                                 <span className="text-gray-400">หมวดหมู่:</span>
-                                <span className="ml-1 font-medium">
-                                  {repair.category_name}
-                                </span>
+                                <span className="ml-1 font-medium">{repair.category_name}</span>
                               </div>
                             )}
                             <div className="flex items-center min-w-0">
                               <User className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
-                              <span className="truncate">
-                                {repair.requester_name || "ไม่ระบุ"}
-                              </span>
+                              <span className="truncate">{repair.requester_name || "ไม่ระบุ"}</span>
                             </div>
                             <div className="flex items-center">
                               <Calendar className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
                               <span>
-                                {new Date(repair.created_at).toLocaleDateString(
-                                  "th-TH",
-                                  {
-                                    year: "numeric",
-                                    month: "short",
-                                    day: "numeric",
-                                  }
-                                )}
+                                {new Date(repair.created_at).toLocaleDateString("th-TH", {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                })}
                               </span>
                             </div>
                             {repair.assigned_name && (
                               <div className="flex items-center min-w-0">
                                 <User className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0" />
-                                <span className="text-gray-400">
-                                  ผู้รับผิดชอบ:
-                                </span>
-                                <span className="ml-1 font-medium truncate">
-                                  {repair.assigned_name}
-                                </span>
+                                <span className="text-gray-400">ผู้รับผิดชอบ:</span>
+                                <span className="ml-1 font-medium truncate">{repair.assigned_name}</span>
                               </div>
                             )}
                           </div>
@@ -1791,13 +1555,11 @@ const RepairList = () => {
                             </Link>
                           )}
 
-                          {user?.role === "user" &&
-                            !canEdit(repair) &&
-                            repair.requester_id === user.id && (
-                              <span className="flex items-center justify-center px-3 py-2 text-xs bg-gray-100 text-gray-500 rounded-lg whitespace-nowrap">
-                                🔒 ไม่สามารถแก้ไขได้
-                              </span>
-                            )}
+                          {user?.role === "user" && !canEdit(repair) && repair.requester_id === user.id && (
+                            <span className="flex items-center justify-center px-3 py-2 text-xs bg-gray-100 text-gray-500 rounded-lg whitespace-nowrap">
+                              🔒 ไม่สามารถแก้ไขได้
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1813,12 +1575,8 @@ const RepairList = () => {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
                   แสดง {(startIndex + 1).toLocaleString("th-TH")}-
-                  {Math.min(
-                    endIndex,
-                    filteredAndSortedRepairs.length
-                  ).toLocaleString("th-TH")}{" "}
-                  จาก {filteredAndSortedRepairs.length.toLocaleString("th-TH")}{" "}
-                  รายการ
+                  {Math.min(endIndex, filteredAndSortedRepairs.length).toLocaleString("th-TH")} จาก{" "}
+                  {filteredAndSortedRepairs.length.toLocaleString("th-TH")} รายการ
                 </div>
                 <div className="flex items-center justify-center space-x-1 sm:space-x-2">
                   <button
@@ -1847,18 +1605,18 @@ const RepairList = () => {
                           <button
                             key={page}
                             onClick={() => handlePageChange(page)}
-                            className={`px-3 py-2 text-sm rounded-lg ${page === currentPage
+                            className={`px-3 py-2 text-sm rounded-lg ${
+                              page === currentPage
                                 ? "bg-blue-600 text-white"
                                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                              }`}
+                            }`}
                           >
                             {page}
                           </button>
                         );
                       } else if (
                         (page === currentPage - 3 && currentPage > 4) ||
-                        (page === currentPage + 3 &&
-                          currentPage < totalPages - 3)
+                        (page === currentPage + 3 && currentPage < totalPages - 3)
                       ) {
                         return (
                           <span key={page} className="px-2 text-gray-400">

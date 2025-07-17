@@ -89,8 +89,11 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    fetchAllData();
-  }, []);
+    // รอให้ user data พร้อมก่อน
+    if (user && user.id && user.role) {
+      fetchAllData();
+    }
+  }, [user]);
 
   // Navigation functions
   const handleNavigateToNewRepair = () => {
@@ -162,14 +165,20 @@ const Dashboard = () => {
         return;
       }
 
+      // ตรวจสอบว่า user data พร้อมใช้งานแล้วหรือไม่
+      if (!user || !user.id || !user.role) {
+        console.log("User data not ready, skipping fetch");
+        return;
+      }
+
       const headers = {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       };
 
-      // เรียก API หลายตัวพร้อมกัน - ดึงข้อมูลทั้งหมดสำหรับทุก role
+      // เรียก API หลายตัวพร้อมกัน
       const requests = [
-        // 1. ข้อมูลการแจ้งซ่อมทั้งหมด (ไม่กรองตาม role)
+        // 1. ข้อมูลการแจ้งซ่อมทั้งหมด
         axios.get('/api/repairs', { headers }),
         // 2. ข้อมูลหมวดหมู่
         axios.get('/api/repairs/categories', { headers })
@@ -194,11 +203,37 @@ const Dashboard = () => {
         // ไม่ error ถ้าดึงข้อมูล users ไม่ได้
       }
 
-      const repairs = repairsResponse.data.repairs || [];
+      const allRepairs = repairsResponse.data.repairs || [];
       const categories = categoriesResponse.data || [];
       const users = usersResponse.data || [];
 
-      // คำนวณสถิติจากข้อมูลจริง
+      console.log("All repairs from API:", allRepairs);
+      console.log("User role:", user?.role);
+      console.log("User ID:", user?.id);
+
+      // กรองข้อมูลตาม role ของผู้ใช้
+      let repairs = [];
+
+      if (user.role === "user") {
+        // user เห็นเฉพาะรายการที่ตนเองแจ้งซ่อม
+        repairs = allRepairs.filter(repair => {
+          const isOwner = repair.requester_id === user.id || 
+                         repair.user_id === user.id ||
+                         repair.created_by === user.id;
+          return isOwner;
+        });
+        console.log("Filtered repairs for user dashboard:", repairs);
+      } else if (user.role === "technician") {
+        // technician เห็นเฉพาะรายการที่ได้รับมอบหมาย
+        repairs = allRepairs.filter(repair => repair.assigned_to === user.id);
+        console.log("Filtered repairs for technician dashboard:", repairs);
+      } else if (user.role === "admin") {
+        // admin เห็นรายการทั้งหมด
+        repairs = allRepairs;
+        console.log("All repairs for admin dashboard:", repairs);
+      }
+
+      // คำนวณสถิติจากข้อมูลที่กรองแล้ว
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -230,7 +265,7 @@ const Dashboard = () => {
         return createdDate >= monthAgo;
       }).length;
 
-      // นับตามหมวดหมู่
+      // นับตามหมวดหมู่ (เฉพาะรายการที่ user เห็นได้)
       const categoryStats = categories.map(category => {
         const count = repairs.filter(r => r.category_id === category.id).length;
         const percentage = repairs.length > 0 ? Math.round((count / repairs.length) * 100) : 0;
@@ -240,7 +275,8 @@ const Dashboard = () => {
           count,
           percentage
         };
-      }).sort((a, b) => b.count - a.count); // เรียงตามจำนวนมากไปน้อย
+      }).filter(cat => cat.count > 0) // แสดงเฉพาะหมวดหมู่ที่มีข้อมูล
+        .sort((a, b) => b.count - a.count); // เรียงตามจำนวนมากไปน้อย
 
       // นับตามระดับความสำคัญ
       const priorityStats = {
@@ -250,26 +286,29 @@ const Dashboard = () => {
         urgent: repairs.filter(r => r.priority === 'urgent').length
       };
 
-      // สถิติช่างเทคนิค - แสดงได้สำหรับทุก role
-      const technicians = users.filter(u => u.role === 'technician' || u.role === 'admin');
-      const technicianStats = technicians.map(tech => {
-        const assignedRepairs = repairs.filter(r => r.assigned_to === tech.id);
-        const completed = assignedRepairs.filter(r => r.status === 'completed').length;
-        const inProgress = assignedRepairs.filter(r => 
-          r.status === 'in_progress' || r.status === 'assigned'
-        ).length;
-        
-        return {
-          id: tech.id,
-          name: tech.full_name || tech.username,
-          completed,
-          in_progress: inProgress,
-          total: assignedRepairs.length
-        };
-      }).filter(tech => tech.total > 0) // แสดงเฉพาะช่างที่มีงาน
-        .sort((a, b) => b.completed - a.completed); // เรียงตามงานที่เสร็จ
+      // สถิติช่างเทคนิค - แสดงเฉพาะสำหรับ admin
+      let technicianStats = [];
+      if (user.role === 'admin') {
+        const technicians = users.filter(u => u.role === 'technician' || u.role === 'admin');
+        technicianStats = technicians.map(tech => {
+          const assignedRepairs = allRepairs.filter(r => r.assigned_to === tech.id);
+          const completed = assignedRepairs.filter(r => r.status === 'completed').length;
+          const inProgress = assignedRepairs.filter(r => 
+            r.status === 'in_progress' || r.status === 'assigned'
+          ).length;
+          
+          return {
+            id: tech.id,
+            name: tech.full_name || tech.username,
+            completed,
+            in_progress: inProgress,
+            total: assignedRepairs.length
+          };
+        }).filter(tech => tech.total > 0) // แสดงเฉพาะช่างที่มีงาน
+          .sort((a, b) => b.completed - a.completed); // เรียงตามงานที่เสร็จ
+      }
 
-      // การแจ้งซ่อม 5 รายการล่าสุด (สำหรับมือถือ) หรือ 10 รายการ (สำหรับ desktop)
+      // การแจ้งซ่อมล่าสุด (ตามที่ user เห็นได้)
       const recentRepairs = repairs
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         .slice(0, isMobile ? 3 : 5);
@@ -417,7 +456,18 @@ const Dashboard = () => {
     return priorityMap[priority] || priority;
   };
 
-const headerContent = (
+  // แสดงข้อความที่เหมาะสมตาม role
+  const getDashboardDescription = () => {
+    if (user?.role === 'admin') {
+      return 'ภาพรวมระบบจัดการการแจ้งซ่อม - แสดงข้อมูลทั้งหมดในระบบ';
+    } else if (user?.role === 'technician') {
+      return 'ภาพรวมงานซ่อมที่ได้รับมอบหมาย';
+    } else {
+      return 'ภาพรวมการแจ้งซ่อมของฉัน';
+    }
+  };
+
+  const headerContent = (
     <div className="flex items-center space-x-4">
       <button
         onClick={handleRefresh}
@@ -440,13 +490,15 @@ const headerContent = (
     </div>
   );
 
-  if (loading) {
+  if (loading || !user || !user.id) {
     return (
       <Layout title="แดชบอร์ด">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 text-sm sm:text-base">กำลังโหลดข้อมูล...</p>
+            <p className="text-gray-600 text-sm sm:text-base">
+              {!user ? "กำลังตรวจสอบสิทธิ์..." : "กำลังโหลดข้อมูล..."}
+            </p>
           </div>
         </div>
       </Layout>
@@ -456,7 +508,7 @@ const headerContent = (
   return (
     <Layout title="แดชบอร์ด" headerContent={headerContent}>
       <div className="space-y-4 sm:space-y-6" style={{ paddingBottom: isMobile ? '80px' : '0' }}>
-        {/* Welcome Message - Responsive */}
+      {/* Welcome Message - Responsive */}
         <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 text-white">
           <div className="flex items-center justify-between">
             <div className="flex-1">
@@ -464,7 +516,7 @@ const headerContent = (
                 ยินดีต้อนรับ{isMobile ? '' : ','} {user?.full_name || user?.username}!
               </h2>
               <p className="text-blue-100 mb-2 sm:mb-4 text-sm sm:text-base">
-                {isMobile ? 'ภาพรวมระบบ' : 'ภาพรวมระบบจัดการการแจ้งซ่อม - แสดงข้อมูลทั้งหมดในระบบ'}
+                {isMobile ? 'ภาพรวมระบบ' : getDashboardDescription()}
               </p>
               <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 text-xs sm:text-sm">
                 <div className="flex items-center">
@@ -476,7 +528,8 @@ const headerContent = (
                 </div>
                 <div className="flex items-center">
                   <Wrench className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                  ทั้งหมด: {statistics.total}
+                  {user?.role === 'admin' ? 'ทั้งหมด:' : 
+                   user?.role === 'technician' ? 'งานของฉัน:' : 'รายการของฉัน:'} {statistics.total}
                 </div>
               </div>
             </div>
@@ -495,7 +548,10 @@ const headerContent = (
           >
             <div className="flex items-center justify-between w-full mb-2">
               <div className="flex-1 min-w-0">
-                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate text-left">รายการทั้งหมด</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate text-left">
+                  {user?.role === 'admin' ? 'รายการทั้งหมด' : 
+                   user?.role === 'technician' ? 'งานของฉัน' : 'รายการของฉัน'}
+                </p>
                 <p className="text-lg sm:text-2xl lg:text-3xl font-bold text-gray-900 text-left">{statistics.total}</p>
               </div>
               <div className="p-2 sm:p-3 bg-blue-100 rounded-lg ml-2">
@@ -687,7 +743,10 @@ const headerContent = (
           <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center mb-4 sm:mb-6">
               <Tag className="w-5 h-5 sm:w-6 sm:h-6 text-purple-500 mr-2 sm:mr-3" />
-              <h3 className="text-sm sm:text-lg font-semibold text-gray-900">หมวดหมู่ที่ถูกแจ้งบ่อย</h3>
+              <h3 className="text-sm sm:text-lg font-semibold text-gray-900">
+                หมวดหมู่{user?.role === 'admin' ? 'ที่ถูกแจ้งบ่อย' : 
+                         user?.role === 'technician' ? 'งานของฉัน' : 'ที่ฉันแจ้ง'}
+              </h3>
             </div>
             <div className="space-y-3 sm:space-y-4">
               {statistics.categories.length === 0 ? (
@@ -744,8 +803,8 @@ const headerContent = (
           </div>
         </div>
 
-        {/* Technician Performance - Responsive Grid */}
-        {statistics.technician_stats.length > 0 && (
+        {/* Technician Performance - แสดงเฉพาะสำหรับ admin */}
+        {user?.role === 'admin' && statistics.technician_stats.length > 0 && (
           <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center mb-4 sm:mb-6">
               <Users className="w-5 h-5 sm:w-6 sm:h-6 text-green-500 mr-2 sm:mr-3" />
@@ -785,10 +844,15 @@ const headerContent = (
 
         {/* Recent Repairs - Mobile Optimized */}
         <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
-          <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-4 sm:mb-6">การแจ้งซ่อมล่าสุด</h3>
+          <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-4 sm:mb-6">
+            {user?.role === 'admin' ? 'การแจ้งซ่อมล่าสุด' : 
+             user?.role === 'technician' ? 'งานล่าสุดของฉัน' : 'การแจ้งซ่อมล่าสุดของฉัน'}
+          </h3>
           <div className="space-y-3 sm:space-y-4">
             {statistics.recent_repairs.length === 0 ? (
-              <p className="text-gray-500 text-center py-6 sm:py-8 text-sm">ไม่มีข้อมูลการแจ้งซ่อม</p>
+              <p className="text-gray-500 text-center py-6 sm:py-8 text-sm">
+                {user?.role === 'technician' ? 'ยังไม่มีงานที่ได้รับมอบหมาย' : 'ไม่มีข้อมูลการแจ้งซ่อม'}
+              </p>
             ) : (
               statistics.recent_repairs.map((repair) => (
                 <TouchButton
@@ -900,7 +964,7 @@ const headerContent = (
                 <span className="text-xs font-medium bg-white bg-opacity-20 px-2 py-1 rounded">หมวดหมู่</span>
               </div>
               <p className="text-lg font-bold">{statistics.categories.length}</p>
-              <p className="text-xs text-purple-100">หมวดหมู่ทั้งหมด</p>
+              <p className="text-xs text-purple-100">หมวดหมู่ที่มีข้อมูล</p>
             </div>
             
             <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg p-4 text-white">
@@ -926,7 +990,9 @@ const headerContent = (
             <div className="grid grid-cols-2 gap-4 text-center">
               <div>
                 <p className="text-xl font-bold">{statistics.today}</p>
-                <p className="text-xs text-green-100">แจ้งใหม่</p>
+                <p className="text-xs text-green-100">
+                  {user?.role === 'technician' ? 'งานใหม่' : 'แจ้งใหม่'}
+                </p>
               </div>
               <div>
                 <p className="text-xl font-bold">
