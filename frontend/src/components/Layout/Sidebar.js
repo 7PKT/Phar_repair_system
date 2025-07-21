@@ -9,7 +9,8 @@ import {
   User, 
   BarChart3,
   Users,
-  Settings
+  Settings,
+  MapPin
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -39,6 +40,12 @@ const Sidebar = () => {
       name: 'จัดการผู้ใช้',
       href: '/admin/users',
       icon: Users,
+      roles: ['admin']
+    },
+    {
+      name: 'จัดการสถานที่',
+      href: '/admin/locations',
+      icon: MapPin,
       roles: ['admin']
     },
     {
@@ -73,6 +80,9 @@ const Sidebar = () => {
       
       case '/admin/users':
         return location.pathname.startsWith('/admin/users');
+      
+      case '/admin/locations':
+        return location.pathname.startsWith('/admin/locations');
       
       case '/admin/settings':
         return location.pathname.startsWith('/admin/settings');

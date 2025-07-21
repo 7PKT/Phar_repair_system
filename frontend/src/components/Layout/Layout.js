@@ -15,7 +15,8 @@ import {
   Home,
   Settings,
   Bell,
-  Search
+  Search,
+  MapPin
 } from 'lucide-react';
 
 const Layout = ({ children, title, headerContent }) => {
@@ -144,6 +145,19 @@ const Layout = ({ children, title, headerContent }) => {
       }
     },
     {
+      name: 'จัดการสถานที่',
+      href: '/admin/locations',
+      icon: MapPin,
+      roles: ['admin'],
+      action: () => {
+        if (user?.role === 'admin') {
+          handleNavigation('/admin/locations');
+        } else {
+          toast.error('ไม่มีสิทธิ์เข้าถึงหน้านี้');
+        }
+      }
+    },
+    {
       name: 'ตั้งค่าระบบ',
       href: '/admin/settings',
       icon: Settings,
@@ -177,6 +191,8 @@ const Layout = ({ children, title, headerContent }) => {
         return location.pathname === '/profile';
       case '/admin/users':
         return location.pathname.startsWith('/admin/users');
+      case '/admin/locations':
+        return location.pathname.startsWith('/admin/locations');
       case '/admin/settings':
         return location.pathname.startsWith('/admin/settings');
       default:

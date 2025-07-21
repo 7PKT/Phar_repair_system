@@ -9,7 +9,9 @@ const RepairForm = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [categoriesLoading, setCategoriesLoading] = useState(true);
+    const [roomsLoading, setRoomsLoading] = useState(false);
     const [categories, setCategories] = useState([]);
+    const [rooms, setRooms] = useState([]);
     const [selectedImages, setSelectedImages] = useState([]);
     const [imagePreviews, setImagePreviews] = useState([]);
     const [isMobile, setIsMobile] = useState(false);
@@ -36,14 +38,14 @@ const RepairForm = () => {
 
     // ข้อมูลอาคารและชั้น (อัปเดตตามข้อมูลใหม่)
     const buildings = {
-        1: { name: 'อาคาร 1', floors: 2 },
+        1: { name: 'อาคาร 1', floors: 3 },
         2: { name: 'อาคาร 2', floors: 4 },
         3: { name: 'อาคาร 3', floors: 5 },
-        4: { name: 'อาคาร 4', floors: 5 },
+        4: { name: 'อาคาร 4', floors: 6 }, // รวมใต้ดิน (0) และดาดฟ้า (6)
         5: { name: 'อาคาร 5', floors: 4 },
         6: { name: 'อาคาร 6', floors: 2 },
-        7: { name: 'อาคาร 7', floors: 5 },
-        8: { name: 'อาคาร 8', floors: 2 },
+        7: { name: 'อาคาร 7', floors: 1 },
+        8: { name: 'อาคาร 8', floors: 1 },
         9: { name: 'อาคาร 9', floors: 1 }
     };
 
@@ -100,6 +102,15 @@ const RepairForm = () => {
     useEffect(() => {
         fetchCategories();
     }, []);
+
+    // ดึงข้อมูลห้องเมื่อเลือกอาคารและชั้น
+    useEffect(() => {
+        if (formData.building && formData.floor !== '') {
+            fetchRooms(formData.building, formData.floor);
+        } else {
+            setRooms([]);
+        }
+    }, [formData.building, formData.floor]);
 
     const fetchCategories = async () => {
         try {
@@ -175,6 +186,49 @@ const RepairForm = () => {
         }
     };
 
+    // ฟังก์ชันดึงข้อมูลห้องจากฐานข้อมูล
+    const fetchRooms = async (building, floor) => {
+        try {
+            setRoomsLoading(true);
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                toast.error('ไม่พบ token การเข้าสู่ระบบ');
+                navigate('/login');
+                return;
+            }
+
+            const response = await axios.get(`/api/rooms/by-building-floor?building=${building}&floor=${floor}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('Rooms response:', response.data);
+
+            if (response.data.success) {
+                setRooms(response.data.data || []);
+            } else {
+                setRooms([]);
+                console.warn('No rooms found for building', building, 'floor', floor);
+            }
+        } catch (error) {
+            console.error('Error fetching rooms:', error);
+            setRooms([]);
+            
+            if (error.response?.status === 401) {
+                toast.error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
+                navigate('/login');
+            } else if (error.response?.status !== 404) {
+                // ไม่แสดง error สำหรับ 404 เพราะอาจจะยังไม่มีห้องในชั้นนั้น
+                toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูลห้อง');
+            }
+        } finally {
+            setRoomsLoading(false);
+        }
+    };
+
     const validateForm = () => {
         const newErrors = {};
 
@@ -205,11 +259,11 @@ const RepairForm = () => {
             if (!formData.building) {
                 newErrors.building = 'กรุณาเลือกอาคาร';
             }
-            if (!formData.floor) {
+            if (formData.floor === '') {
                 newErrors.floor = 'กรุณาเลือกชั้น';
             }
-            if (!formData.room.trim()) {
-                newErrors.room = 'กรุณากรอกห้อง';
+            if (!formData.room) {
+                newErrors.room = 'กรุณาเลือกห้อง';
             }
         } else if (locationType === 'outdoor') {
             if (!formData.outdoor_location.trim()) {
@@ -230,12 +284,22 @@ const RepairForm = () => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
 
-        // ถ้าเปลี่ยนอาคาร ให้รีเซ็ตชั้น
+        // ถ้าเปลี่ยนอาคาร ให้รีเซ็ตชั้นและห้อง
         if (name === 'building') {
             setFormData({
                 ...formData,
                 [name]: value,
-                floor: '' // รีเซ็ตชั้นเมื่อเปลี่ยนอาคาร
+                floor: '', // รีเซ็ตชั้นเมื่อเปลี่ยนอาคาร
+                room: ''   // รีเซ็ตห้องเมื่อเปลี่ยนอาคาร
+            });
+            setRooms([]); // ล้างรายการห้อง
+        } 
+        // ถ้าเปลี่ยนชั้น ให้รีเซ็ตห้อง
+        else if (name === 'floor') {
+            setFormData({
+                ...formData,
+                [name]: value,
+                room: '' // รีเซ็ตห้องเมื่อเปลี่ยนชั้น
             });
         } else {
             setFormData({
@@ -263,6 +327,7 @@ const RepairForm = () => {
             room: '',
             outdoor_location: ''
         });
+        setRooms([]); // ล้างรายการห้อง
         // ลบ error ที่เกี่ยวข้องกับสถานที่
         const newErrors = { ...errors };
         delete newErrors.building;
@@ -419,7 +484,11 @@ const RepairForm = () => {
             // สร้าง location string ตามประเภทสถานที่
             let location = '';
             if (locationType === 'indoor') {
-                location = `${buildings[formData.building].name} ชั้น ${formData.floor} ห้อง ${formData.room.trim()}`;
+                // หาชื่อห้องจาก rooms array
+                const selectedRoom = rooms.find(room => room.id === parseInt(formData.room));
+                const roomName = selectedRoom ? selectedRoom.name : formData.room;
+                
+                location = `${buildings[formData.building].name} ชั้น ${formData.floor} ${roomName}`;
             } else if (locationType === 'outdoor') {
                 location = `ภายนอกอาคาร: ${formData.outdoor_location.trim()}`;
             }
@@ -489,9 +558,23 @@ const RepairForm = () => {
         if (!buildingId || !buildings[buildingId]) return [];
 
         const floors = [];
-        for (let i = 1; i <= buildings[buildingId].floors; i++) {
-            floors.push(i);
+        const maxFloors = buildings[buildingId].floors;
+        
+        // สำหรับอาคาร 4 ที่มีใต้ดิน
+        if (buildingId === '4') {
+            floors.push({ value: 0, label: 'ใต้ดิน' });
         }
+        
+        // เพิ่มชั้นปกติ
+        for (let i = 1; i <= maxFloors; i++) {
+            // สำหรับอาคาร 4 ชั้น 6 คือดาดฟ้า
+            if (buildingId === '4' && i === 6) {
+                floors.push({ value: i, label: 'ดาดฟ้า' });
+            } else {
+                floors.push({ value: i, label: `ชั้น ${i}` });
+            }
+        }
+        
         return floors;
     };
 
@@ -699,8 +782,8 @@ const RepairForm = () => {
                                                 >
                                                     <option value="">เลือกชั้น</option>
                                                     {getFloorsForBuilding(formData.building).map(floor => (
-                                                        <option key={floor} value={floor}>
-                                                            ชั้น {floor}
+                                                        <option key={floor.value} value={floor.value}>
+                                                            {floor.label}
                                                         </option>
                                                     ))}
                                                 </select>
@@ -714,27 +797,63 @@ const RepairForm = () => {
                                                 <label className="block text-xs font-medium text-gray-600 mb-1">
                                                     ห้อง
                                                 </label>
-                                                <input
-                                                    type="text"
-                                                    name="room"
-                                                    value={formData.room}
-                                                    onChange={handleInputChange}
-                                                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.room ? 'border-red-300' : 'border-gray-300'
-                                                        } ${isMobile ? 'text-base' : 'text-sm'}`}
-                                                    placeholder="เช่น 101, ห้องประชุม"
-                                                    style={{ fontSize: isMobile ? '16px' : '14px' }}
-                                                />
+                                                {roomsLoading ? (
+                                                    <div className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg border-gray-300 bg-gray-50 flex items-center justify-center ${isMobile ? 'text-base' : 'text-sm'}`}>
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                                                        กำลังโหลด...
+                                                    </div>
+                                                ) : rooms.length > 0 ? (
+                                                    <select
+                                                        name="room"
+                                                        value={formData.room}
+                                                        onChange={handleInputChange}
+                                                        disabled={!formData.building || formData.floor === ''}
+                                                        className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${errors.room ? 'border-red-300' : 'border-gray-300'
+                                                            } ${isMobile ? 'text-base' : 'text-sm'}`}
+                                                        style={{ fontSize: isMobile ? '16px' : '14px' }}
+                                                    >
+                                                        <option value="">เลือกห้อง</option>
+                                                        {rooms.map((room) => (
+                                                            <option key={room.id} value={room.id}>
+                                                                {room.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
+                                                    <input
+                                                        type="text"
+                                                        name="room"
+                                                        value={formData.room}
+                                                        onChange={handleInputChange}
+                                                        disabled={!formData.building || formData.floor === ''}
+                                                        className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${errors.room ? 'border-red-300' : 'border-gray-300'
+                                                            } ${isMobile ? 'text-base' : 'text-sm'}`}
+                                                        placeholder="พิมพ์ชื่อห้อง"
+                                                        style={{ fontSize: isMobile ? '16px' : '14px' }}
+                                                    />
+                                                )}
                                                 {errors.room && (
                                                     <p className="mt-1 text-xs text-red-600">{errors.room}</p>
+                                                )}
+                                                {formData.building && formData.floor !== '' && rooms.length === 0 && !roomsLoading && (
+                                                    <p className="mt-1 text-xs text-gray-500">
+                                                        ไม่พบห้องในฐานข้อมูล กรุณาพิมพ์ชื่อห้อง
+                                                    </p>
                                                 )}
                                             </div>
                                         </div>
 
                                         {/* Location Preview */}
-                                        {formData.building && formData.floor && formData.room && (
+                                        {formData.building && formData.floor !== '' && formData.room && (
                                             <div className={`mt-2 p-3 bg-blue-50 rounded-lg`}>
                                                 <p className={`${isMobile ? 'text-sm' : 'text-sm'} text-blue-800`}>
-                                                    📍 <strong>สถานที่:</strong> {buildings[formData.building].name} ชั้น {formData.floor} ห้อง {formData.room}
+                                                    📍 <strong>สถานที่:</strong> {buildings[formData.building].name} {
+                                                        formData.floor === '0' ? 'ใต้ดิน' : 
+                                                        formData.building === '4' && formData.floor === '6' ? 'ดาดฟ้า' :
+                                                        `ชั้น ${formData.floor}`
+                                                    } {
+                                                        rooms.find(room => room.id === parseInt(formData.room))?.name || formData.room
+                                                    }
                                                 </p>
                                             </div>
                                         )}

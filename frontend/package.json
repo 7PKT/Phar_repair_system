@@ -23,7 +23,9 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "import-rooms": "node scripts/import_rooms.js",
+    "create-rooms-table": "node -e \"require('./scripts/import_rooms.js').createConnection().then(conn => { require('./scripts/import_rooms.js').createRoomsTable(conn); conn.end(); })\""
   },
   "eslintConfig": {
     "extends": [

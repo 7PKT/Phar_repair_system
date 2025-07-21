@@ -20,6 +20,7 @@ app.use('/uploads', express.static('uploads'));
 const authRoutes = require('./routes/auth');
 const repairRoutes = require('./routes/repairs');
 const adminRoutes = require('./routes/admin');
+const roomRoutes = require('./routes/rooms');
 
 // ✅ Import system-settings route
 let systemSettingsRoutes = null;
@@ -35,6 +36,7 @@ try {
 app.use('/api/auth', authRoutes);
 app.use('/api/repairs', repairRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/rooms', roomRoutes);
 
 // ✅ เพิ่ม system-settings route
 if (systemSettingsRoutes) {
