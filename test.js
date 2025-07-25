@@ -18,9 +18,9 @@ const RepairForm = () => {
     const [selectedImages, setSelectedImages] = useState([]);
     const [imagePreviews, setImagePreviews] = useState([]);
     const [isMobile, setIsMobile] = useState(false);
-    const [locationType, setLocationType] = useState('');
+    const [locationType, setLocationType] = useState(''); // 'indoor' หรือ 'outdoor'
 
-
+    // Detect mobile device
     useEffect(() => {
         const checkMobile = () => {
             const userAgent = navigator.userAgent;
@@ -46,12 +46,13 @@ const RepairForm = () => {
         building: '',
         floor: '',
         room: '',
-        outdoor_location: '',
+        outdoor_location: '', // สำหรับสถานที่ภายนอกอาคาร
         priority: 'medium'
     });
 
     const [errors, setErrors] = useState({});
 
+    // Touch-friendly button component
     const TouchButton = ({ onClick, children, className = "", disabled = false, variant = "primary", type = "button" }) => {
         const baseClasses = "relative overflow-hidden transition-all duration-200 active:scale-95 select-none";
         const variantClasses = {
@@ -89,13 +90,11 @@ const RepairForm = () => {
     };
 
     useEffect(() => {
-        const loadData = async () => {
-            await fetchCategories();
-            await fetchBuildings();
-        };
-        loadData();
+        fetchCategories();
+        fetchBuildings();
     }, []);
 
+    // ดึงข้อมูลชั้นเมื่อเลือกอาคาร
     useEffect(() => {
         if (formData.building) {
             fetchFloors(formData.building);
@@ -103,16 +102,16 @@ const RepairForm = () => {
             setFloors([]);
             setRooms([]);
         }
-    }, [formData.building]); 
+    }, [formData.building]);
 
-
+    // ดึงข้อมูลห้องเมื่อเลือกอาคารและชั้น
     useEffect(() => {
         if (formData.building && formData.floor !== '') {
             fetchRooms(formData.building, formData.floor);
         } else {
             setRooms([]);
         }
-    }, [formData.building, formData.floor]);  
+    }, [formData.building, formData.floor]);
 
     const fetchCategories = async () => {
         try {
@@ -134,7 +133,7 @@ const RepairForm = () => {
 
             console.log('Categories response:', response.data);
 
-             
+            // รองรับหลายรูปแบบของ response
             let categoriesData = [];
             if (Array.isArray(response.data)) {
                 categoriesData = response.data;
@@ -146,7 +145,7 @@ const RepairForm = () => {
 
             setCategories(categoriesData);
 
-             
+            // ถ้าไม่มี categories ให้สร้าง default categories
             if (categoriesData.length === 0) {
                 console.warn('No categories found, using default categories');
                 const defaultCategories = [
@@ -163,7 +162,7 @@ const RepairForm = () => {
         } catch (error) {
             console.error('Error fetching categories:', error);
 
-             
+            // แสดง error message ที่เฉพาะเจาะจง
             if (error.response?.status === 401) {
                 toast.error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
                 navigate('/login');
@@ -173,7 +172,7 @@ const RepairForm = () => {
                 toast.error('เกิดข้อผิดพลาดในการโหลดหมวดหมู่');
             }
 
-             
+            // ใช้ default categories เมื่อเกิด error
             const defaultCategories = [
                 { id: 1, name: 'คอมพิวเตอร์' },
                 { id: 2, name: 'เครือข่าย' },
@@ -188,7 +187,7 @@ const RepairForm = () => {
         }
     };
 
-     
+    // ฟังก์ชันดึงข้อมูลอาคารจากฐานข้อมูล
     const fetchBuildings = async () => {
         try {
             setBuildingsLoading(true);
@@ -210,38 +209,15 @@ const RepairForm = () => {
             console.log('Buildings response:', response.data);
 
             if (response.data.success) {
-                const rawBuildings = response.data.data || [];
-                console.log('Raw buildings:', rawBuildings);
-
-                 
-                if (rawBuildings.length > 0) {
-                    console.log('First building object:', rawBuildings[0]);
-                    console.log('Building properties:', Object.keys(rawBuildings[0]));
-                }
-
-                 
-                const buildingsWithNames = rawBuildings.map(building => {
-                    const buildingNumber = building.building;
-                    return {
-                        ...building,
-                        building_name: `อาคาร ${buildingNumber}`,
-                        display_name: `อาคาร ${buildingNumber}`,
-                        building_id: buildingNumber
-                    };
-                });
-
-                console.log('Buildings with names:', buildingsWithNames);
-                setBuildings(buildingsWithNames);
+                setBuildings(response.data.data || []);
             } else {
-                console.warn('API response success = false');
                 setBuildings([]);
                 toast.error('ไม่พบข้อมูลอาคาร');
             }
         } catch (error) {
             console.error('Error fetching buildings:', error);
-            console.error('Error response:', error.response?.data);
             setBuildings([]);
-
+            
             if (error.response?.status === 401) {
                 toast.error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
                 navigate('/login');
@@ -253,7 +229,7 @@ const RepairForm = () => {
         }
     };
 
-     
+    // ฟังก์ชันดึงข้อมูลชั้นจากฐานข้อมูล
     const fetchFloors = async (building) => {
         try {
             const token = localStorage.getItem('token');
@@ -282,7 +258,7 @@ const RepairForm = () => {
         } catch (error) {
             console.error('Error fetching floors:', error);
             setFloors([]);
-
+            
             if (error.response?.status === 401) {
                 toast.error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
                 navigate('/login');
@@ -292,7 +268,7 @@ const RepairForm = () => {
         }
     };
 
-     
+    // ฟังก์ชันดึงข้อมูลห้องจากฐานข้อมูล
     const fetchRooms = async (building, floor) => {
         try {
             setRoomsLoading(true);
@@ -322,12 +298,12 @@ const RepairForm = () => {
         } catch (error) {
             console.error('Error fetching rooms:', error);
             setRooms([]);
-
+            
             if (error.response?.status === 401) {
                 toast.error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
                 navigate('/login');
             } else if (error.response?.status !== 404) {
-                 
+                // ไม่แสดง error สำหรับ 404 เพราะอาจจะยังไม่มีห้องในชั้นนั้น
                 toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูลห้อง');
             }
         } finally {
@@ -360,7 +336,7 @@ const RepairForm = () => {
             newErrors.location = 'กรุณาเลือกประเภทสถานที่';
         }
 
-         
+        // Validate location based on type
         if (locationType === 'indoor') {
             if (!formData.building) {
                 newErrors.building = 'กรุณาเลือกอาคาร';
@@ -390,23 +366,23 @@ const RepairForm = () => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
 
-         
+        // ถ้าเปลี่ยนอาคาร ให้รีเซ็ตชั้นและห้อง
         if (name === 'building') {
             setFormData({
                 ...formData,
                 [name]: value,
-                floor: '',  
-                room: ''    
+                floor: '', // รีเซ็ตชั้นเมื่อเปลี่ยนอาคาร
+                room: ''   // รีเซ็ตห้องเมื่อเปลี่ยนอาคาร
             });
-            setFloors([]);  
-            setRooms([]);  
-        }
-         
+            setFloors([]); // ล้างรายการชั้น
+            setRooms([]); // ล้างรายการห้อง
+        } 
+        // ถ้าเปลี่ยนชั้น ให้รีเซ็ตห้อง
         else if (name === 'floor') {
             setFormData({
                 ...formData,
                 [name]: value,
-                room: ''  
+                room: '' // รีเซ็ตห้องเมื่อเปลี่ยนชั้น
             });
         } else {
             setFormData({
@@ -415,7 +391,7 @@ const RepairForm = () => {
             });
         }
 
-         
+        // ลบ error message เมื่อผู้ใช้แก้ไข
         if (errors[name]) {
             setErrors({
                 ...errors,
@@ -426,7 +402,7 @@ const RepairForm = () => {
 
     const handleLocationTypeChange = (type) => {
         setLocationType(type);
-         
+        // รีเซ็ตข้อมูลสถานที่เมื่อเปลี่ยนประเภท
         setFormData({
             ...formData,
             building: '',
@@ -434,9 +410,9 @@ const RepairForm = () => {
             room: '',
             outdoor_location: ''
         });
-        setFloors([]);  
-        setRooms([]);  
-         
+        setFloors([]); // ล้างรายการชั้น
+        setRooms([]); // ล้างรายการห้อง
+        // ลบ error ที่เกี่ยวข้องกับสถานที่
         const newErrors = { ...errors };
         delete newErrors.building;
         delete newErrors.floor;
@@ -446,7 +422,7 @@ const RepairForm = () => {
         setErrors(newErrors);
     };
 
-     
+    // ปรับปรุงฟังก์ชัน handleImageChange
     const handleImageChange = (event) => {
         const files = Array.from(event.target.files);
 
@@ -455,14 +431,14 @@ const RepairForm = () => {
         console.log('Selected files:', files);
 
         const validFiles = [];
-        const newPreviews = [];  
-        const maxFileSize = 5 * 1024 * 1024;  
+        const newPreviews = []; // ย้ายมาไว้ด้านบน
+        const maxFileSize = 5 * 1024 * 1024; // 5MB
         const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
 
         let processedCount = 0;
         const totalFiles = files.length;
 
-         
+        // ฟังก์ชันสำหรับอัปเดต state หลังจากประมวลผลครบ
         const updateImageState = () => {
             if (validFiles.length > 0) {
                 setSelectedImages(prev => {
@@ -481,11 +457,11 @@ const RepairForm = () => {
             }
         };
 
-         
+        // ประมวลผลแต่ละไฟล์
         files.forEach((file, index) => {
             console.log(`Processing file ${index + 1}:`, file.name, file.size, file.type);
 
-             
+            // ตรวจสอบขนาดไฟล์
             if (file.size > maxFileSize) {
                 toast.error(`ไฟล์ ${file.name} มีขนาดใหญ่เกินไป (สูงสุด 5MB)`);
                 processedCount++;
@@ -495,7 +471,7 @@ const RepairForm = () => {
                 return;
             }
 
-             
+            // ตรวจสอบชนิดไฟล์
             if (!allowedTypes.includes(file.type)) {
                 toast.error(`ไฟล์ ${file.name} ไม่ใช่รูปภาพที่รองรับ`);
                 processedCount++;
@@ -505,10 +481,10 @@ const RepairForm = () => {
                 return;
             }
 
-             
+            // ไฟล์ผ่านการตรวจสอบ
             validFiles.push(file);
 
-             
+            // สร้าง preview
             const reader = new FileReader();
             reader.onload = (e) => {
                 const previewData = {
@@ -523,7 +499,7 @@ const RepairForm = () => {
 
                 processedCount++;
 
-                 
+                // เมื่อประมวลผลครบทุกไฟล์
                 if (processedCount === totalFiles) {
                     console.log('All files processed, updating state...');
                     updateImageState();
@@ -542,11 +518,11 @@ const RepairForm = () => {
             reader.readAsDataURL(file);
         });
 
-         
+        // รีเซ็ต input หลังจากเลือกไฟล์
         event.target.value = '';
     };
 
-     
+    // ปรับปรุงฟังก์ชัน removeImage
     const removeImage = (index) => {
         console.log('Removing image at index:', index);
 
@@ -589,25 +565,23 @@ const RepairForm = () => {
             submitData.append('description', formData.description.trim());
             submitData.append('category_id', formData.category_id);
 
-             
+            // สร้าง location string ตามประเภทสถานที่
             let location = '';
             if (locationType === 'indoor') {
-                 
-                const selectedBuilding = buildings.find(building => building.building === formData.building);
-                const buildingName = selectedBuilding ?
-                    (selectedBuilding.building_name || `อาคาร ${selectedBuilding.building}`) :
-                    `อาคาร ${formData.building}`;
-
-                 
+                // หาชื่อห้องจาก rooms array หรืออาคารจาก buildings array
+                const selectedBuilding = buildings.find(building => building.building == formData.building);
+                const buildingName = selectedBuilding ? `อาคาร ${selectedBuilding.building}` : `อาคาร ${formData.building}`;
+                
+                // หาชื่อห้องจาก rooms array
                 const selectedRoom = rooms.find(room => room.id === parseInt(formData.room));
                 const roomName = selectedRoom ? selectedRoom.name : formData.room;
-
-                 
+                
+                // สร้างข้อความชั้น
                 let floorText = '';
                 if (formData.floor === '0') {
                     floorText = 'ใต้ดิน';
                 } else {
-                     
+                    // ตรวจสอบว่าเป็นดาดฟ้าหรือไม่จากข้อมูลห้อง
                     const roomData = rooms.find(room => room.id === parseInt(formData.room));
                     if (roomData && roomData.description && roomData.description.includes('ดาดฟ้า')) {
                         floorText = 'ดาดฟ้า';
@@ -615,7 +589,7 @@ const RepairForm = () => {
                         floorText = `ชั้น ${formData.floor}`;
                     }
                 }
-
+                
                 location = `${buildingName} ${floorText} ${roomName}`;
             } else if (locationType === 'outdoor') {
                 location = `ภายนอกอาคาร: ${formData.outdoor_location.trim()}`;
@@ -624,9 +598,9 @@ const RepairForm = () => {
             submitData.append('location', location);
             submitData.append('priority', formData.priority);
 
-             
+            // เพิ่มรูปภาพทั้งหมด
             selectedImages.forEach((image, index) => {
-                submitData.append(`images`, image);  
+                submitData.append(`images`, image); // ใช้ชื่อ field เดียวกันสำหรับหลายไฟล์
             });
 
             console.log('Submitting repair data with', selectedImages.length, 'images');
@@ -644,7 +618,7 @@ const RepairForm = () => {
                 duration: 3000
             });
 
-             
+            // นำทางไปหน้ารายละเอียด หรือรายการแจ้งซ่อม
             if (response.data.repair && response.data.repair.id) {
                 navigate(`/repairs/${response.data.repair.id}`);
             } else if (response.data.id) {
@@ -655,14 +629,14 @@ const RepairForm = () => {
         } catch (error) {
             console.error('Submit error:', error);
 
-             
+            // แสดง error message ที่เฉพาะเจาะจง
             if (error.response?.status === 401) {
                 toast.error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
                 navigate('/login');
             } else if (error.response?.status === 403) {
                 toast.error('ไม่มีสิทธิ์สร้างการแจ้งซ่อม');
             } else if (error.response?.status === 422) {
-                 
+                // Validation errors from server
                 const serverErrors = error.response.data.errors || {};
                 const errorMessages = Object.values(serverErrors).flat();
                 if (errorMessages.length > 0) {
@@ -681,20 +655,20 @@ const RepairForm = () => {
         }
     };
 
-     
+    // ฟังก์ชันแสดงชื่อชั้น
     const getFloorDisplayName = (floor, buildingId = null, roomId = null) => {
         if (floor === '0' || floor === 0) {
             return 'ใต้ดิน';
         }
-
-         
+        
+        // ตรวจสอบว่าเป็นดาดฟ้าหรือไม่จากข้อมูลห้อง
         if (roomId) {
             const roomData = rooms.find(room => room.id === parseInt(roomId));
             if (roomData && roomData.description && roomData.description.includes('ดาดฟ้า')) {
                 return 'ดาดฟ้า';
             }
         }
-
+        
         return `ชั้น ${floor}`;
     };
 
@@ -761,7 +735,7 @@ const RepairForm = () => {
                                     } ${isMobile ? 'text-base' : 'text-sm'}`}
                                 placeholder="เช่น ไฟดับในห้องประชุม, คอมพิวเตอร์เปิดไม่ติด"
                                 maxLength={200}
-                                style={{ fontSize: isMobile ? '16px' : '14px' }}  
+                                style={{ fontSize: isMobile ? '16px' : '14px' }} // Prevent zoom on iOS
                             />
                             {errors.title && (
                                 <p className="mt-1 text-sm text-red-600">{errors.title}</p>
@@ -854,7 +828,7 @@ const RepairForm = () => {
                         {locationType && (
                             <div className="space-y-4">
                                 {locationType === 'indoor' ? (
-                                     
+                                    // Indoor Location Form
                                     <>
                                         <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700`}>
                                             รายละเอียดสถานที่ <span className="text-red-500">*</span>
@@ -875,17 +849,11 @@ const RepairForm = () => {
                                                     style={{ fontSize: isMobile ? '16px' : '14px' }}
                                                 >
                                                     <option value="">เลือกอาคาร</option>
-                                                    {buildings.map((building, index) => {
-                                                        console.log('Rendering building option:', building);
-                                                        const buildingValue = building.building;
-                                                        const buildingLabel = building.building_name || `อาคาร ${buildingValue}`;
-
-                                                        return (
-                                                            <option key={`building-${buildingValue || index}`} value={buildingValue}>
-                                                                {buildingLabel}
-                                                            </option>
-                                                        );
-                                                    })}
+                                                    {buildings.map((building) => (
+                                                        <option key={building.building} value={building.building}>
+                                                            อาคาร {building.building}
+                                                        </option>
+                                                    ))}
                                                 </select>
                                                 {errors.building && (
                                                     <p className="mt-1 text-xs text-red-600">{errors.building}</p>
@@ -974,10 +942,8 @@ const RepairForm = () => {
                                             <div className={`mt-2 p-3 bg-blue-50 rounded-lg`}>
                                                 <p className={`${isMobile ? 'text-sm' : 'text-sm'} text-blue-800`}>
                                                     📍 <strong>สถานที่:</strong> {(() => {
-                                                        const selectedBuilding = buildings.find(building => building.building === formData.building);
-                                                        const buildingName = selectedBuilding ?
-                                                            (selectedBuilding.building_name || `อาคาร ${selectedBuilding.building}`) :
-                                                            `อาคาร ${formData.building}`;
+                                                        const selectedBuilding = buildings.find(building => building.building == formData.building);
+                                                        const buildingName = selectedBuilding ? `อาคาร ${selectedBuilding.building}` : `อาคาร ${formData.building}`;
                                                         const floorText = getFloorDisplayName(formData.floor, formData.building, formData.room);
                                                         const selectedRoom = rooms.find(room => room.id === parseInt(formData.room));
                                                         const roomName = selectedRoom ? selectedRoom.name : formData.room;
@@ -988,7 +954,7 @@ const RepairForm = () => {
                                         )}
                                     </>
                                 ) : (
-                                     
+                                    // Outdoor Location Form
                                     <>
                                         <div>
                                             <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
@@ -1137,6 +1103,7 @@ const RepairForm = () => {
                                                     className={`w-full ${isMobile ? 'h-24' : 'h-32'} object-cover rounded-lg border border-gray-300`}
                                                 />
 
+                                                {/* ปุ่มลบ */}
                                                 <button
                                                     type="button"
                                                     onClick={() => removeImage(index)}

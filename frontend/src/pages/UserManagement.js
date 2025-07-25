@@ -1,42 +1,33 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import Layout from '../components/Layout/Layout';
 import axios from 'axios';
-import toast from 'react-hot-toast';
 import {
-    Users,
-    Search,
-    Filter,
-    Plus,
+    AlertCircle,
+    Calendar,
+    ChevronDown,
+    ChevronUp,
+    Crown,
     Edit,
-    Trash2,
-    Shield,
-    User,
+    FileSpreadsheet,
+    Filter,
     Mail,
     Phone,
-    Calendar,
-    Settings,
     RefreshCw,
-    Download,
-    Upload,
-    Eye,
-    EyeOff,
-    X,
-    Check,
-    AlertCircle,
-    UserCheck,
-    UserX,
-    Crown,
-    Wrench,
-    UserPlus,
     Save,
-    FileSpreadsheet,
+    Search,
+    Settings,
     SortAsc,
     SortDesc,
-    Menu,
-    ChevronDown,
-    ChevronUp
+    Trash2,
+    User,
+    UserCheck,
+    UserPlus,
+    Users,
+    Wrench,
+    X
 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
+import Layout from '../components/Layout/Layout';
+import { useAuth } from '../contexts/AuthContext';
 
 const UserManagement = () => {
     const { user } = useAuth();
@@ -57,7 +48,6 @@ const UserManagement = () => {
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [showMobileFilters, setShowMobileFilters] = useState(false);
 
-    // Form data for create/edit
     const [formData, setFormData] = useState({
         username: '',
         email: '',
@@ -72,7 +62,6 @@ const UserManagement = () => {
     const [formErrors, setFormErrors] = useState({});
 
     useEffect(() => {
-        // ตรวจสอบสิทธิ์ - เฉพาะ admin เท่านั้น
         if (user?.role !== 'admin') {
             toast.error('คุณไม่มีสิทธิ์เข้าถึงหน้านี้');
             return;
@@ -246,7 +235,6 @@ const UserManagement = () => {
                 notification_enabled: formData.notification_enabled
             };
 
-            // เพิ่มรหัสผ่านถ้ามีการระบุ
             if (formData.password) {
                 submitData.password = formData.password;
             }
@@ -526,24 +514,19 @@ const UserManagement = () => {
         return badgeMap[role] || 'bg-gray-100 text-gray-800 border-gray-200';
     };
 
-    // ตรวจสอบว่าไม่ใช่ admin หลัก
     const canDeleteUser = (userData) => {
         return userData.id !== 1 && userData.id !== user?.id;
     };
 
-    // ปรับปรุงการกรองให้ทำงานจริง
     const filteredUsers = users.filter(userData => {
-        // Search filter
         const matchesSearch = searchTerm === '' ||
             userData.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             userData.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             userData.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             userData.phone?.toLowerCase().includes(searchTerm.toLowerCase());
 
-        // Role filter
         const matchesRole = roleFilter === 'all' || userData.role === roleFilter;
 
-        // Status filter - สมมติว่าผู้ใช้ active ถ้าเข้าสู่ระบบใน 30 วันที่ผ่านมา
         let matchesStatus = true;
         if (statusFilter !== 'all') {
             const thirtyDaysAgo = new Date();
@@ -556,7 +539,6 @@ const UserManagement = () => {
         return matchesSearch && matchesRole && matchesStatus;
     });
 
-    // เพิ่มการเรียงลำดับ
     const filteredAndSortedUsers = [...filteredUsers].sort((a, b) => {
         let aValue, bValue;
 
@@ -588,7 +570,6 @@ const UserManagement = () => {
         return 0;
     });
 
-    // Pagination
     const totalPages = Math.ceil(filteredAndSortedUsers.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -599,7 +580,6 @@ const UserManagement = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // Mobile-friendly header content
     const headerContent = (
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
             <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -636,7 +616,6 @@ const UserManagement = () => {
         </div>
     );
 
-    // ตรวจสอบสิทธิ์
     if (user?.role !== 'admin') {
         return (
             <Layout title="ไม่มีสิทธิ์เข้าถึง">
@@ -902,8 +881,8 @@ const UserManagement = () => {
                                 <button
                                     onClick={() => handleSort('created_at')}
                                     className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${sortField === 'created_at'
-                                            ? 'bg-blue-100 text-blue-700'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        ? 'bg-blue-100 text-blue-700'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                         }`}
                                 >
                                     วันที่สมัคร
@@ -914,8 +893,8 @@ const UserManagement = () => {
                                 <button
                                     onClick={() => handleSort('role')}
                                     className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${sortField === 'role'
-                                            ? 'bg-blue-100 text-blue-700'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        ? 'bg-blue-100 text-blue-700'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                         }`}
                                 >
                                     บทบาท
@@ -926,8 +905,8 @@ const UserManagement = () => {
                                 <button
                                     onClick={() => handleSort('full_name')}
                                     className={`flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-lg transition-colors ${sortField === 'full_name'
-                                            ? 'bg-blue-100 text-blue-700'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        ? 'bg-blue-100 text-blue-700'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                         }`}
                                 >
                                     ชื่อ
@@ -1106,8 +1085,8 @@ const UserManagement = () => {
                                                         key={page}
                                                         onClick={() => handlePageChange(page)}
                                                         className={`px-3 py-2 text-sm rounded-lg ${page === currentPage
-                                                                ? 'bg-blue-600 text-white'
-                                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                            ? 'bg-blue-600 text-white'
+                                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                                             }`}
                                                     >
                                                         {page}
@@ -1429,8 +1408,7 @@ const UserManagement = () => {
                                         value={formData.role}
                                         onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                                         className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        disabled={selectedUser.id === 1} // ป้องกันการเปลี่ยน role ของ admin หลัก
-                                    >
+                                        disabled={selectedUser.id === 1}                                      >
                                         <option value="user">ผู้ใช้งาน</option>
                                         <option value="technician">ช่างเทคนิค</option>
                                         <option value="admin">ผู้ดูแลระบบ</option>

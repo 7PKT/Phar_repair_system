@@ -1,5 +1,3 @@
-// SystemSettings.js - Complete React Component (แก้ไข key props แล้ว)
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -20,9 +18,9 @@ const SystemSettings = () => {
 
   const checkAuth = () => {
     const token = localStorage.getItem('token');
-    
+
     console.log('Auth check - user:', user, 'token:', !!token);
-    
+
     if (!token) {
       showToast('กรุณาเข้าสู่ระบบ', 'error');
       setTimeout(() => {
@@ -30,7 +28,7 @@ const SystemSettings = () => {
       }, 2000);
       return false;
     }
-    
+
     if (!user || user.role !== 'admin') {
       console.log('User role check failed:', user?.role);
       showToast('ไม่มีสิทธิ์เข้าถึงหน้านี้ (ต้องเป็น Admin)', 'error');
@@ -39,7 +37,7 @@ const SystemSettings = () => {
       }, 2000);
       return false;
     }
-    
+
     console.log('Auth check passed');
     return true;
   };
@@ -62,15 +60,15 @@ const SystemSettings = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${API_BASE_URL}/api/repairs/system-settings`, {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.status === 404) {
         console.warn('System settings API not found, using mock data');
         const mockSettings = getMockSettings();
@@ -78,17 +76,17 @@ const SystemSettings = () => {
         showToast('API ยังไม่พร้อม - แสดงข้อมูลจำลอง', 'info');
         return;
       }
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
       setSettings(Array.isArray(data) ? data : []);
       console.log('Settings loaded:', data);
     } catch (error) {
       console.error('Fetch settings error:', error);
-      
+
       if (error.message.includes('404') || error.message.includes('Not Found')) {
         const mockSettings = getMockSettings();
         setSettings(mockSettings);
@@ -178,8 +176,8 @@ const SystemSettings = () => {
   };
 
   const handleSettingChange = (settingKey, newValue) => {
-    setSettings(prev => prev.map(setting => 
-      setting.setting_key === settingKey 
+    setSettings(prev => prev.map(setting =>
+      setting.setting_key === settingKey
         ? { ...setting, setting_value: newValue }
         : setting
     ));
@@ -194,23 +192,23 @@ const SystemSettings = () => {
         const token = localStorage.getItem('token');
         const response = await fetch(
           `${API_BASE_URL}/api/repairs/system-settings/${settingKey}?reveal=true`,
-          { 
+          {
             method: 'GET',
-            headers: { 
+            headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             }
           }
         );
-        
+
         if (!response.ok) {
           throw new Error('Failed to reveal setting');
         }
-        
+
         const data = await response.json();
-        
-        setSettings(prev => prev.map(setting => 
-          setting.setting_key === settingKey 
+
+        setSettings(prev => prev.map(setting =>
+          setting.setting_key === settingKey
             ? { ...setting, setting_value: data.setting_value }
             : setting
         ));
@@ -281,11 +279,11 @@ const SystemSettings = () => {
   const testLineConnection = async () => {
     setTesting(true);
     setTestResult(null);
-    
+
     try {
       const token = localStorage.getItem('token');
       const userData = user || JSON.parse(localStorage.getItem('user') || '{}');
-      
+
       const testData = {
         title: 'ทดสอบการแจ้งเตือน LINE',
         requester_name: userData.full_name || 'ผู้ดูแลระบบ',
@@ -346,8 +344,8 @@ const SystemSettings = () => {
         title: 'ระบบทั่วไป',
         icon: 'settings',
         color: 'text-gray-600',
-        settings: settings.filter(s => 
-          s.setting_key.startsWith('system_') || 
+        settings: settings.filter(s =>
+          s.setting_key.startsWith('system_') ||
           s.setting_key.startsWith('admin_') ||
           s.setting_key.startsWith('max_')
         )
@@ -372,16 +370,15 @@ const SystemSettings = () => {
     return labels[settingKey] || settingKey;
   };
 
-  // ✅ แก้ไขฟังก์ชัน renderSettingInput โดยเพิ่ม key props
   const renderSettingInput = (setting) => {
     const isBoolean = setting.setting_type === 'boolean';
     const isNumber = setting.setting_type === 'number';
     const isSensitive = setting.is_sensitive;
     const isHidden = isSensitive && !showSensitive[setting.setting_key];
-    
-    const isRequired = setting.setting_key === 'line_channel_access_token' || 
-                      setting.setting_key === 'line_channel_secret' || 
-                      setting.setting_key === 'line_group_id';
+
+    const isRequired = setting.setting_key === 'line_channel_access_token' ||
+      setting.setting_key === 'line_channel_secret' ||
+      setting.setting_key === 'line_group_id';
     const isEmpty = !setting.setting_value || setting.setting_value.trim() === '' || setting.setting_value === '••••••••';
     const hasError = isRequired && isEmpty && !isHidden;
 
@@ -411,13 +408,12 @@ const SystemSettings = () => {
       type: isHidden ? 'password' : (isNumber ? 'number' : 'text'),
       value: isHidden ? '••••••••' : (setting.setting_value || ''),
       onChange: (e) => handleSettingChange(setting.setting_key, e.target.value),
-      className: `w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-        hasError ? 'border-red-300 bg-red-50' : 'border-gray-300'
-      }`,
+      className: `w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${hasError ? 'border-red-300 bg-red-50' : 'border-gray-300'
+        }`,
       placeholder: setting.setting_key === 'line_channel_access_token' ? 'กรุณากรอก Channel Access Token' :
-                   setting.setting_key === 'line_channel_secret' ? 'กรุณากรอก Channel Secret' :
-                   setting.setting_key === 'line_group_id' ? 'กรุณากรอก Group ID (เช่น C1234567890...)' :
-                   setting.description,
+        setting.setting_key === 'line_channel_secret' ? 'กรุณากรอก Channel Secret' :
+          setting.setting_key === 'line_group_id' ? 'กรุณากรอก Group ID (เช่น C1234567890...)' :
+            setting.description,
       disabled: isHidden,
       required: isRequired
     });
@@ -444,7 +440,7 @@ const SystemSettings = () => {
           strokeLinecap: 'round',
           strokeLinejoin: 'round',
           strokeWidth: '2',
-          d: showSensitive[setting.setting_key] ? 
+          d: showSensitive[setting.setting_key] ?
             'M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21' :
             'M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'
         })))
@@ -455,9 +451,9 @@ const SystemSettings = () => {
   };
 
   const renderSettingField = (setting) => {
-    const isRequired = setting.setting_key === 'line_channel_access_token' || 
-                      setting.setting_key === 'line_channel_secret' || 
-                      setting.setting_key === 'line_group_id';
+    const isRequired = setting.setting_key === 'line_channel_access_token' ||
+      setting.setting_key === 'line_channel_secret' ||
+      setting.setting_key === 'line_group_id';
     const isEmpty = !setting.setting_value || setting.setting_value.trim() === '' || setting.setting_value === '••••••••';
     const hasError = isRequired && isEmpty;
 
@@ -572,11 +568,11 @@ const SystemSettings = () => {
             strokeLinecap: 'round',
             strokeLinejoin: 'round',
             strokeWidth: '2',
-            d: category === 'line' ? 
+            d: category === 'line' ?
               'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z' :
               category === 'notifications' ?
-              'M15 17h5l-5-5-5 5h5zm0 0V10.5A3.5 3.5 0 0011.5 7a3.5 3.5 0 00-3.5 3.5V17h3.5zm0 0h5v2.5A2.5 2.5 0 0117.5 22h-5a2.5 2.5 0 01-2.5-2.5V17h5z' :
-              'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z'
+                'M15 17h5l-5-5-5 5h5zm0 0V10.5A3.5 3.5 0 0011.5 7a3.5 3.5 0 00-3.5 3.5V17h3.5zm0 0h5v2.5A2.5 2.5 0 0117.5 22h-5a2.5 2.5 0 01-2.5-2.5V17h5z' :
+                'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z'
           })),
           h('h2', {
             key: `text-${category}`,
@@ -646,7 +642,7 @@ const SystemSettings = () => {
       if (!checkAuth()) return;
       fetchSettings();
     }, 100);
-    
+
     return () => clearTimeout(timer);
   }, [user]);
 

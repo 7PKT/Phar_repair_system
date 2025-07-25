@@ -41,7 +41,7 @@ router.post('/register', async (req, res) => {
     }
 });
 
-// Login
+
 router.post('/login', async (req, res) => {
     try {
         const { email, username, password } = req.body;
@@ -54,14 +54,14 @@ router.post('/login', async (req, res) => {
             password: password ? '***' : 'undefined' 
         });
 
-        // ตรวจสอบข้อมูลที่จำเป็น
+        
         if (!loginIdentifier || !password) {
             return res.status(400).json({ 
                 message: 'กรุณากรอกอีเมลหรือชื่อผู้ใช้ และรหัสผ่าน'
             });
         }
 
-        // หาผู้ใช้จากฐานข้อมูล - ค้นหาทั้ง email และ username
+        
         console.log('🔍 Searching user in database...');
         const [users] = await db.execute(
             'SELECT * FROM users WHERE email = ? OR username = ?',
@@ -81,7 +81,7 @@ router.post('/login', async (req, res) => {
             role: user.role 
         });
 
-        // ตรวจสอบรหัสผ่าน
+        
         console.log('🔐 Comparing passwords...');
         const isValidPassword = await bcrypt.compare(password, user.password);
         console.log('🔍 Password comparison result:', isValidPassword);
@@ -91,13 +91,13 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ message: 'อีเมลหรือชื่อผู้ใช้ หรือรหัสผ่านไม่ถูกต้อง' });
         }
 
-        // อัพเดท last_login
+        
         await db.execute(
             'UPDATE users SET last_login = NOW() WHERE id = ?',
             [user.id]
         );
 
-        // สร้าง JWT token
+        
         const tokenPayload = { 
             id: user.id, 
             email: user.email, 
@@ -112,9 +112,9 @@ router.post('/login', async (req, res) => {
             { expiresIn: '24h' }
         );
 
-        // ส่งข้อมูลผู้ใช้กลับไป (ไม่รวมรหัสผ่าน)
+        
         const { password: _, ...userWithoutPassword } = user;
-        userWithoutPassword.last_login = new Date(); // ส่งเวลาปัจจุบันเป็น last_login
+        userWithoutPassword.last_login = new Date(); 
 
         console.log('✅ Login successful for:', user.username);
 
@@ -131,10 +131,10 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// Verify token
+
 router.get('/verify', authenticateToken, async (req, res) => {
     try {
-        // หาข้อมูลผู้ใช้ล่าสุดจากฐานข้อมูล
+        
         const [users] = await db.execute(
             'SELECT id, email, full_name, username, phone, role, last_login, created_at, updated_at FROM users WHERE id = ?',
             [req.user.id]
@@ -154,12 +154,12 @@ router.get('/verify', authenticateToken, async (req, res) => {
     }
 });
 
-// Logout (สำหรับ client-side ให้ลบ token)
+
 router.post('/logout', (req, res) => {
     res.json({ message: 'ออกจากระบบสำเร็จ' });
 });
 
-// Get profile
+
 router.get('/profile', authenticateToken, async (req, res) => {
     try {
         const [users] = await db.execute(
@@ -178,17 +178,17 @@ router.get('/profile', authenticateToken, async (req, res) => {
     }
 });
 
-// Update profile
+
 router.put('/profile', authenticateToken, async (req, res) => {
     try {
         const { full_name, username, phone } = req.body;
 
-        // ตรวจสอบข้อมูลที่จำเป็น
+        
         if (!full_name || !full_name.trim()) {
             return res.status(400).json({ message: 'กรุณากรอกชื่อ-นามสกุล' });
         }
 
-        // ตรวจสอบว่า username ซ้ำกับคนอื่นหรือไม่ (ถ้ามีการเปลี่ยน)
+        
         if (username && username.trim()) {
             const [existingUsers] = await db.execute(
                 'SELECT id FROM users WHERE username = ? AND id != ?',
@@ -212,12 +212,12 @@ router.put('/profile', authenticateToken, async (req, res) => {
     }
 });
 
-// Change password
+
 router.put('/change-password', authenticateToken, async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
 
-        // ตรวจสอบข้อมูลที่จำเป็น
+        
         if (!currentPassword || !newPassword) {
             return res.status(400).json({ message: 'กรุณากรอกรหัสผ่านเดิมและรหัสผ่านใหม่' });
         }
@@ -226,7 +226,7 @@ router.put('/change-password', authenticateToken, async (req, res) => {
             return res.status(400).json({ message: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร' });
         }
 
-        // หาข้อมูลผู้ใช้
+        
         const [users] = await db.execute(
             'SELECT password FROM users WHERE id = ?',
             [req.user.id]
@@ -236,16 +236,16 @@ router.put('/change-password', authenticateToken, async (req, res) => {
             return res.status(404).json({ message: 'ไม่พบข้อมูลผู้ใช้' });
         }
 
-        // ตรวจสอบรหัสผ่านเดิม
+        
         const isValidPassword = await bcrypt.compare(currentPassword, users[0].password);
         if (!isValidPassword) {
             return res.status(400).json({ message: 'รหัสผ่านเดิมไม่ถูกต้อง' });
         }
 
-        // เข้ารหัสรหัสผ่านใหม่
+        
         const hashedNewPassword = await bcrypt.hash(newPassword, 10);
 
-        // อัพเดทรหัสผ่าน
+        
         await db.execute(
             'UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?',
             [hashedNewPassword, req.user.id]
@@ -258,7 +258,7 @@ router.put('/change-password', authenticateToken, async (req, res) => {
     }
 });
 
-// Debug: Reset password (ใช้เฉพาะ development)
+
 router.post('/reset-password-debug', async (req, res) => {
     try {
         if (process.env.NODE_ENV === 'production') {
@@ -271,10 +271,10 @@ router.post('/reset-password-debug', async (req, res) => {
             return res.status(400).json({ message: 'กรุณาระบุ userId และ newPassword' });
         }
 
-        // สร้าง hash ใหม่
+        
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         
-        // อัพเดทใน database
+        
         await db.execute(
             'UPDATE users SET password = ? WHERE id = ?',
             [hashedPassword, userId]

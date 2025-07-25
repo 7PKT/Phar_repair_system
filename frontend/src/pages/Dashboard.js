@@ -69,7 +69,7 @@ const Dashboard = () => {
     last6Months: []
   });
 
-  // Detect mobile device and screen size
+
   useEffect(() => {
     const checkMobile = () => {
       const userAgent = navigator.userAgent;
@@ -89,13 +89,13 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    // รอให้ user data พร้อมก่อน
+
     if (user && user.id && user.role) {
       fetchAllData();
     }
   }, [user]);
 
-  // Navigation functions
+
   const handleNavigateToNewRepair = () => {
     navigate('/repairs/new');
   };
@@ -120,7 +120,7 @@ const Dashboard = () => {
     }
   };
 
-  // Touch-friendly button component
+
   const TouchButton = ({ onClick, children, className = "", disabled = false, variant = "primary" }) => {
     const baseClasses = "relative overflow-hidden transition-all duration-200 active:scale-95 select-none";
     const variantClasses = {
@@ -129,9 +129,9 @@ const Dashboard = () => {
       success: "bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-lg hover:shadow-xl",
       outline: "border-2 border-blue-600 text-blue-600 hover:bg-blue-50 active:bg-blue-100"
     };
-    
+
     const touchSizeClasses = isMobile ? "min-h-[48px] min-w-[48px] px-4 py-3" : "px-4 py-2";
-    
+
     return (
       <button
         onClick={onClick}
@@ -145,7 +145,7 @@ const Dashboard = () => {
           ${isMobile ? 'text-base font-medium' : 'text-sm'}
           rounded-lg flex items-center justify-center
         `}
-        style={{ 
+        style={{
           WebkitTapHighlightColor: 'transparent',
           touchAction: 'manipulation'
         }}
@@ -159,13 +159,13 @@ const Dashboard = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      
+
       if (!token) {
         toast.error('ไม่พบ token การเข้าสู่ระบบ');
         return;
       }
 
-      // ตรวจสอบว่า user data พร้อมใช้งานแล้วหรือไม่
+
       if (!user || !user.id || !user.role) {
         console.log("User data not ready, skipping fetch");
         return;
@@ -176,31 +176,31 @@ const Dashboard = () => {
         'Content-Type': 'application/json'
       };
 
-      // เรียก API หลายตัวพร้อมกัน
+
       const requests = [
-        // 1. ข้อมูลการแจ้งซ่อมทั้งหมด
+
         axios.get('/api/repairs', { headers }),
-        // 2. ข้อมูลหมวดหมู่
+
         axios.get('/api/repairs/categories', { headers })
       ];
 
       const [repairsResponse, categoriesResponse] = await Promise.all(requests);
 
-      // 3. ข้อมูลผู้ใช้ (สำหรับสถิติช่าง) - ลองดึงแยก และ handle error
+
       let usersResponse = { data: [] };
       try {
-        // ลองเรียก endpoint ใหม่ก่อน (ถ้ามี)
+
         try {
           usersResponse = await axios.get('/api/repairs/technicians', { headers });
           console.log('✅ Successfully fetched technicians data');
         } catch (techError) {
-          // ถ้า endpoint ใหม่ไม่มี ให้ลองเรียก endpoint เดิม
+
           usersResponse = await axios.get('/api/admin/users', { headers });
           console.log('✅ Successfully fetched users data');
         }
       } catch (userError) {
         console.log('⚠️ Cannot fetch users data (403 expected for user role):', userError.response?.status);
-        // ไม่ error ถ้าดึงข้อมูล users ไม่ได้
+
       }
 
       const allRepairs = repairsResponse.data.repairs || [];
@@ -211,35 +211,35 @@ const Dashboard = () => {
       console.log("User role:", user?.role);
       console.log("User ID:", user?.id);
 
-      // กรองข้อมูลตาม role ของผู้ใช้
+
       let repairs = [];
 
       if (user.role === "user") {
-        // user เห็นเฉพาะรายการที่ตนเองแจ้งซ่อม
+
         repairs = allRepairs.filter(repair => {
-          const isOwner = repair.requester_id === user.id || 
-                         repair.user_id === user.id ||
-                         repair.created_by === user.id;
+          const isOwner = repair.requester_id === user.id ||
+            repair.user_id === user.id ||
+            repair.created_by === user.id;
           return isOwner;
         });
         console.log("Filtered repairs for user dashboard:", repairs);
       } else if (user.role === "technician") {
-        // technician เห็นเฉพาะรายการที่ได้รับมอบหมาย
+
         repairs = allRepairs.filter(repair => repair.assigned_to === user.id);
         console.log("Filtered repairs for technician dashboard:", repairs);
       } else if (user.role === "admin") {
-        // admin เห็นรายการทั้งหมด
+
         repairs = allRepairs;
         console.log("All repairs for admin dashboard:", repairs);
       }
 
-      // คำนวณสถิติจากข้อมูลที่กรองแล้ว
+
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
       const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-      // นับตามสถานะ
+
       const statusCounts = {
         total: repairs.length,
         pending: repairs.filter(r => r.status === 'pending').length,
@@ -249,7 +249,7 @@ const Dashboard = () => {
         cancelled: repairs.filter(r => r.status === 'cancelled').length
       };
 
-      // นับตามช่วงเวลา
+
       const todayCount = repairs.filter(r => {
         const createdDate = new Date(r.created_at);
         return createdDate >= today;
@@ -265,7 +265,7 @@ const Dashboard = () => {
         return createdDate >= monthAgo;
       }).length;
 
-      // นับตามหมวดหมู่ (เฉพาะรายการที่ user เห็นได้)
+
       const categoryStats = categories.map(category => {
         const count = repairs.filter(r => r.category_id === category.id).length;
         const percentage = repairs.length > 0 ? Math.round((count / repairs.length) * 100) : 0;
@@ -275,10 +275,10 @@ const Dashboard = () => {
           count,
           percentage
         };
-      }).filter(cat => cat.count > 0) // แสดงเฉพาะหมวดหมู่ที่มีข้อมูล
-        .sort((a, b) => b.count - a.count); // เรียงตามจำนวนมากไปน้อย
+      }).filter(cat => cat.count > 0)
+        .sort((a, b) => b.count - a.count);
 
-      // นับตามระดับความสำคัญ
+
       const priorityStats = {
         low: repairs.filter(r => r.priority === 'low').length,
         medium: repairs.filter(r => r.priority === 'medium').length,
@@ -286,17 +286,17 @@ const Dashboard = () => {
         urgent: repairs.filter(r => r.priority === 'urgent').length
       };
 
-      // สถิติช่างเทคนิค - แสดงเฉพาะสำหรับ admin
+
       let technicianStats = [];
       if (user.role === 'admin') {
         const technicians = users.filter(u => u.role === 'technician' || u.role === 'admin');
         technicianStats = technicians.map(tech => {
           const assignedRepairs = allRepairs.filter(r => r.assigned_to === tech.id);
           const completed = assignedRepairs.filter(r => r.status === 'completed').length;
-          const inProgress = assignedRepairs.filter(r => 
+          const inProgress = assignedRepairs.filter(r =>
             r.status === 'in_progress' || r.status === 'assigned'
           ).length;
-          
+
           return {
             id: tech.id,
             name: tech.full_name || tech.username,
@@ -304,65 +304,65 @@ const Dashboard = () => {
             in_progress: inProgress,
             total: assignedRepairs.length
           };
-        }).filter(tech => tech.total > 0) // แสดงเฉพาะช่างที่มีงาน
-          .sort((a, b) => b.completed - a.completed); // เรียงตามงานที่เสร็จ
+        }).filter(tech => tech.total > 0)
+          .sort((a, b) => b.completed - a.completed);
       }
 
-      // การแจ้งซ่อมล่าสุด (ตามที่ user เห็นได้)
+
       const recentRepairs = repairs
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         .slice(0, isMobile ? 3 : 5);
 
-      // คำนวณข้อมูลสำหรับกราฟ 7 วันที่ผ่านมา
+
       const last7DaysData = [];
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
-        
+
         const count = repairs.filter(r => {
           const repairDate = new Date(r.created_at).toISOString().split('T')[0];
           return repairDate === dateStr;
         }).length;
-        
+
         last7DaysData.push({
           date: date.toISOString(),
           count: count
         });
       }
 
-      // คำนวณข้อมูลสำหรับกราฟ 4 สัปดาห์ที่ผ่านมา
+
       const last4WeeksData = [];
       for (let i = 3; i >= 0; i--) {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - (i + 1) * 7);
         const endDate = new Date();
         endDate.setDate(endDate.getDate() - i * 7);
-        
+
         const count = repairs.filter(r => {
           const repairDate = new Date(r.created_at);
           return repairDate >= startDate && repairDate < endDate;
         }).length;
-        
+
         last4WeeksData.push({
           week: `สัปดาห์ ${4 - i}`,
           count: count
         });
       }
 
-      // คำนวณข้อมูลสำหรับกราฟ 6 เดือนที่ผ่านมา
+
       const last6MonthsData = [];
       for (let i = 5; i >= 0; i--) {
         const date = new Date();
         date.setMonth(date.getMonth() - i);
         const year = date.getFullYear();
         const month = date.getMonth();
-        
+
         const count = repairs.filter(r => {
           const repairDate = new Date(r.created_at);
           return repairDate.getFullYear() === year && repairDate.getMonth() === month;
         }).length;
-        
+
         last6MonthsData.push({
           month: date.toLocaleDateString('th-TH', { month: 'short' }),
           count: count
@@ -385,8 +385,8 @@ const Dashboard = () => {
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      
-      // แสดง error message ที่เฉพาะเจาะจง
+
+
       if (error.response?.status === 401) {
         toast.error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
       } else if (error.response?.status === 403) {
@@ -456,7 +456,7 @@ const Dashboard = () => {
     return priorityMap[priority] || priority;
   };
 
-  // แสดงข้อความที่เหมาะสมตาม role
+
   const getDashboardDescription = () => {
     if (user?.role === 'admin') {
       return 'ภาพรวมระบบจัดการการแจ้งซ่อม - แสดงข้อมูลทั้งหมดในระบบ';
@@ -508,7 +508,7 @@ const Dashboard = () => {
   return (
     <Layout title="แดชบอร์ด" headerContent={headerContent}>
       <div className="space-y-4 sm:space-y-6" style={{ paddingBottom: isMobile ? '80px' : '0' }}>
-      {/* Welcome Message - Responsive */}
+        { }
         <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 text-white">
           <div className="flex items-center justify-between">
             <div className="flex-1">
@@ -521,15 +521,15 @@ const Dashboard = () => {
               <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 text-xs sm:text-sm">
                 <div className="flex items-center">
                   <Activity className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                  อัพเดท: {new Date().toLocaleTimeString('th-TH', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
+                  อัพเดท: {new Date().toLocaleTimeString('th-TH', {
+                    hour: '2-digit',
+                    minute: '2-digit'
                   })}
                 </div>
                 <div className="flex items-center">
                   <Wrench className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                  {user?.role === 'admin' ? 'ทั้งหมด:' : 
-                   user?.role === 'technician' ? 'งานของฉัน:' : 'รายการของฉัน:'} {statistics.total}
+                  {user?.role === 'admin' ? 'ทั้งหมด:' :
+                    user?.role === 'technician' ? 'งานของฉัน:' : 'รายการของฉัน:'} {statistics.total}
                 </div>
               </div>
             </div>
@@ -539,7 +539,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Main Statistics Cards - Responsive Grid */}
+        { }
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
           <TouchButton
             onClick={handleNavigateToRepairs}
@@ -549,8 +549,8 @@ const Dashboard = () => {
             <div className="flex items-center justify-between w-full mb-2">
               <div className="flex-1 min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-gray-600 truncate text-left">
-                  {user?.role === 'admin' ? 'รายการทั้งหมด' : 
-                   user?.role === 'technician' ? 'งานของฉัน' : 'รายการของฉัน'}
+                  {user?.role === 'admin' ? 'รายการทั้งหมด' :
+                    user?.role === 'technician' ? 'งานของฉัน' : 'รายการของฉัน'}
                 </p>
                 <p className="text-lg sm:text-2xl lg:text-3xl font-bold text-gray-900 text-left">{statistics.total}</p>
               </div>
@@ -599,9 +599,9 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Time Period Statistics with Charts - Mobile Optimized */}
+        { }
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-          {/* Last 7 Days Chart */}
+          { }
           <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm sm:text-lg font-semibold text-gray-900">7 วันที่ผ่านมา</h3>
@@ -610,8 +610,8 @@ const Dashboard = () => {
             <div className="h-32 sm:h-40 mb-3">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={statistics.last7Days}>
-                  <XAxis 
-                    dataKey="date" 
+                  <XAxis
+                    dataKey="date"
                     axisLine={false}
                     tickLine={false}
                     tick={{ fontSize: isMobile ? 10 : 12, fill: '#6B7280' }}
@@ -621,7 +621,7 @@ const Dashboard = () => {
                     }}
                   />
                   <YAxis hide />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{
                       backgroundColor: '#F9FAFB',
                       border: '1px solid #E5E7EB',
@@ -630,18 +630,18 @@ const Dashboard = () => {
                     }}
                     labelFormatter={(value) => {
                       const date = new Date(value);
-                      return date.toLocaleDateString('th-TH', { 
+                      return date.toLocaleDateString('th-TH', {
                         year: 'numeric',
-                        month: 'long', 
-                        day: 'numeric' 
+                        month: 'long',
+                        day: 'numeric'
                       });
                     }}
                     formatter={(value, name) => [value, 'รายการใหม่']}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="count" 
-                    stroke="#10B981" 
+                  <Line
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#10B981"
                     strokeWidth={2}
                     dot={{ fill: '#10B981', strokeWidth: 2, r: 3 }}
                     activeDot={{ r: 5, fill: '#10B981' }}
@@ -655,7 +655,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Last 4 Weeks Chart */}
+          { }
           <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm sm:text-lg font-semibold text-gray-900">4 สัปดาห์ที่ผ่านมา</h3>
@@ -664,14 +664,14 @@ const Dashboard = () => {
             <div className="h-32 sm:h-40 mb-3">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={statistics.last4Weeks}>
-                  <XAxis 
-                    dataKey="week" 
+                  <XAxis
+                    dataKey="week"
                     axisLine={false}
                     tickLine={false}
                     tick={{ fontSize: isMobile ? 10 : 12, fill: '#6B7280' }}
                   />
                   <YAxis hide />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{
                       backgroundColor: '#F9FAFB',
                       border: '1px solid #E5E7EB',
@@ -680,8 +680,8 @@ const Dashboard = () => {
                     }}
                     formatter={(value, name) => [value, 'รายการรวม']}
                   />
-                  <Bar 
-                    dataKey="count" 
+                  <Bar
+                    dataKey="count"
                     fill="#3B82F6"
                     radius={[4, 4, 0, 0]}
                   />
@@ -694,7 +694,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Last 6 Months Chart */}
+          { }
           <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm sm:text-lg font-semibold text-gray-900">6 เดือนที่ผ่านมา</h3>
@@ -703,14 +703,14 @@ const Dashboard = () => {
             <div className="h-32 sm:h-40 mb-3">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={statistics.last6Months}>
-                  <XAxis 
-                    dataKey="month" 
+                  <XAxis
+                    dataKey="month"
                     axisLine={false}
                     tickLine={false}
                     tick={{ fontSize: isMobile ? 10 : 12, fill: '#6B7280' }}
                   />
                   <YAxis hide />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{
                       backgroundColor: '#F9FAFB',
                       border: '1px solid #E5E7EB',
@@ -719,10 +719,10 @@ const Dashboard = () => {
                     }}
                     formatter={(value, name) => [value, 'รายการรวม']}
                   />
-                  <Area 
-                    type="monotone" 
-                    dataKey="count" 
-                    stroke="#8B5CF6" 
+                  <Area
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#8B5CF6"
                     fill="#8B5CF6"
                     fillOpacity={0.3}
                     strokeWidth={2}
@@ -737,15 +737,15 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Categories and Priority Stats - Responsive Layout */}
+        { }
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-          {/* Popular Categories */}
+          { }
           <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center mb-4 sm:mb-6">
               <Tag className="w-5 h-5 sm:w-6 sm:h-6 text-purple-500 mr-2 sm:mr-3" />
               <h3 className="text-sm sm:text-lg font-semibold text-gray-900">
-                หมวดหมู่{user?.role === 'admin' ? 'ที่ถูกแจ้งบ่อย' : 
-                         user?.role === 'technician' ? 'งานของฉัน' : 'ที่ฉันแจ้ง'}
+                หมวดหมู่{user?.role === 'admin' ? 'ที่ถูกแจ้งบ่อย' :
+                  user?.role === 'technician' ? 'งานของฉัน' : 'ที่ฉันแจ้ง'}
               </h3>
             </div>
             <div className="space-y-3 sm:space-y-4">
@@ -760,8 +760,8 @@ const Dashboard = () => {
                     </div>
                     <div className="flex items-center space-x-2 sm:space-x-3 ml-2">
                       <div className="w-16 sm:w-24 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-purple-500 h-2 rounded-full" 
+                        <div
+                          className="bg-purple-500 h-2 rounded-full"
                           style={{ width: `${category.percentage}%` }}
                         ></div>
                       </div>
@@ -773,7 +773,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Priority Statistics */}
+          { }
           <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center mb-4 sm:mb-6">
               <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500 mr-2 sm:mr-3" />
@@ -788,10 +788,10 @@ const Dashboard = () => {
                   </div>
                   <div className="flex items-center space-x-2 sm:space-x-3 ml-2">
                     <div className="w-16 sm:w-24 bg-gray-200 rounded-full h-2">
-                      <div 
+                      <div
                         className={`h-2 rounded-full ${getPriorityColor(priority)}`}
-                        style={{ 
-                          width: `${statistics.total > 0 ? (count / statistics.total) * 100 : 0}%` 
+                        style={{
+                          width: `${statistics.total > 0 ? (count / statistics.total) * 100 : 0}%`
                         }}
                       ></div>
                     </div>
@@ -803,7 +803,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Technician Performance - แสดงเฉพาะสำหรับ admin */}
+        { }
         {user?.role === 'admin' && statistics.technician_stats.length > 0 && (
           <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center mb-4 sm:mb-6">
@@ -827,12 +827,12 @@ const Dashboard = () => {
                       <span>กำลังทำ: {tech.in_progress}</span>
                     </div>
                   </div>
-                  {/* Progress Bar */}
+                  { }
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-green-500 h-2 rounded-full transition-all duration-300" 
-                      style={{ 
-                        width: `${tech.total > 0 ? (tech.completed / tech.total) * 100 : 0}%` 
+                    <div
+                      className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${tech.total > 0 ? (tech.completed / tech.total) * 100 : 0}%`
                       }}
                     ></div>
                   </div>
@@ -842,11 +842,11 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Recent Repairs - Mobile Optimized */}
+        { }
         <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
           <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-4 sm:mb-6">
-            {user?.role === 'admin' ? 'การแจ้งซ่อมล่าสุด' : 
-             user?.role === 'technician' ? 'งานล่าสุดของฉัน' : 'การแจ้งซ่อมล่าสุดของฉัน'}
+            {user?.role === 'admin' ? 'การแจ้งซ่อมล่าสุด' :
+              user?.role === 'technician' ? 'งานล่าสุดของฉัน' : 'การแจ้งซ่อมล่าสุดของฉัน'}
           </h3>
           <div className="space-y-3 sm:space-y-4">
             {statistics.recent_repairs.length === 0 ? (
@@ -894,8 +894,8 @@ const Dashboard = () => {
               ))
             )}
           </div>
-          
-          {/* Show more button for mobile */}
+
+          { }
           {isMobile && statistics.recent_repairs.length > 0 && (
             <div className="mt-4 text-center">
               <TouchButton
@@ -909,7 +909,7 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Mobile Quick Actions */}
+        { }
         {isMobile && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">การดำเนินการด่วน</h3>
@@ -922,7 +922,7 @@ const Dashboard = () => {
                 <Wrench className="w-6 h-6 text-white mb-2" />
                 <span className="text-xs font-medium text-white">แจ้งซ่อมใหม่</span>
               </TouchButton>
-              
+
               <TouchButton
                 onClick={handleNavigateToRepairs}
                 variant="success"
@@ -931,7 +931,7 @@ const Dashboard = () => {
                 <BarChart3 className="w-6 h-6 text-white mb-2" />
                 <span className="text-xs font-medium text-white">ดูรายการ</span>
               </TouchButton>
-              
+
               <TouchButton
                 onClick={handleNavigateToProfile}
                 variant="secondary"
@@ -940,7 +940,7 @@ const Dashboard = () => {
                 <User className="w-6 h-6 text-gray-600 mb-2" />
                 <span className="text-xs font-medium text-gray-700">โปรไฟล์</span>
               </TouchButton>
-              
+
               {user?.role === 'admin' && (
                 <TouchButton
                   onClick={handleNavigateToUsers}
@@ -955,7 +955,7 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Additional Mobile Statistics Cards */}
+        { }
         {isMobile && (
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg p-4 text-white">
@@ -966,7 +966,7 @@ const Dashboard = () => {
               <p className="text-lg font-bold">{statistics.categories.length}</p>
               <p className="text-xs text-purple-100">หมวดหมู่ที่มีข้อมูล</p>
             </div>
-            
+
             <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg p-4 text-white">
               <div className="flex items-center justify-between mb-2">
                 <Activity className="w-5 h-5 text-indigo-200" />
@@ -980,7 +980,7 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Performance Insights - Mobile Only */}
+        { }
         {isMobile && (
           <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-4 text-white">
             <div className="flex items-center mb-3">
@@ -996,8 +996,8 @@ const Dashboard = () => {
               </div>
               <div>
                 <p className="text-xl font-bold">
-                  {statistics.recent_repairs.filter(r => 
-                    r.status === 'completed' && 
+                  {statistics.recent_repairs.filter(r =>
+                    r.status === 'completed' &&
                     new Date(r.updated_at || r.created_at).toDateString() === new Date().toDateString()
                   ).length}
                 </p>

@@ -1,9 +1,8 @@
-// scripts/import_rooms.js - สคริปต์สำหรับ import ข้อมูลห้องจากตารางครุภัณฑ์เครื่องปรับอากาศ
 const mysql = require('mysql2/promise');
 const fs = require('fs').promises;
 const path = require('path');
 
-// ข้อมูลการเชื่อมต่อฐานข้อมูล
+
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
@@ -12,9 +11,9 @@ const dbConfig = {
   charset: 'utf8mb4'
 };
 
-// ข้อมูลห้องจากไฟล์ที่ให้มา (แปลงจากตารางครุภัณฑ์เครื่องปรับอากาศ)
+
 const roomsData = [
-  // อาคาร 1
+
   { name: 'ห้องการเงิน การคลังและพัสดุ', building: 1, floor: 1, description: null },
   { name: 'ห้องโถงบริการการศึกษา', building: 1, floor: 1, description: null },
   { name: 'ห้องงานบริการการศึกษา', building: 1, floor: 1, description: null },
@@ -28,7 +27,7 @@ const roomsData = [
   { name: 'ห้องเฟื่องฟ้า 2', building: 1, floor: 3, description: 'ดาดฟ้า' },
   { name: 'ห้องเฟื่องฟ้า 3', building: 1, floor: 3, description: 'ดาดฟ้า' },
 
-  // อาคาร 2
+
   { name: 'ห้องเครื่องสำอางค์', building: 2, floor: 1, description: null },
   { name: 'ห้องปฏิบัติการจุลวิทยา 1', building: 2, floor: 1, description: null },
   { name: 'ห้องปฏิบัติการจุลวิทยา 2', building: 2, floor: 1, description: null },
@@ -44,7 +43,7 @@ const roomsData = [
   { name: 'ห้องบรรยายผักหวาน (308)', building: 2, floor: 3, description: null },
   { name: 'ห้องพักอาจารย์ 6', building: 2, floor: 4, description: null },
 
-  // อาคาร 3
+
   { name: 'ห้องปฏิบัติการยาเม็ด 1', building: 3, floor: 1, description: null },
   { name: 'ห้องปฏิบัติการยาเม็ด 2', building: 3, floor: 1, description: null },
   { name: 'ห้องปฏิบัติการยาเม็ด 3', building: 3, floor: 1, description: null },
@@ -106,7 +105,7 @@ const roomsData = [
   { name: 'ห้องปฏิบัติการชั้น 5 - 10', building: 3, floor: 5, description: null },
   { name: 'ห้องปฏิบัติการชั้น 5 - 11', building: 3, floor: 5, description: null },
 
-  // อาคาร 4
+
   { name: 'ห้องใต้ดินหน่วยอาคาร', building: 4, floor: 0, description: 'ใต้ดิน' },
   { name: 'งานบริหารงานทั่วไป', building: 4, floor: 1, description: null },
   { name: 'งานนโยบายและแผน', building: 4, floor: 1, description: null },
@@ -150,7 +149,7 @@ const roomsData = [
   { name: 'ห้องเครื่องลิฟท์หน้าภาคบริบาลฯ', building: 4, floor: 6, description: 'ดาดฟ้า' },
   { name: 'ห้องเครื่องลิฟท์หน้าภาควิทย์ฯ', building: 4, floor: 6, description: 'ดาดฟ้า' },
 
-  // อาคาร 5
+
   { name: 'ห้อง Derm X', building: 5, floor: 1, description: null },
   { name: 'ห้องระบาด', building: 5, floor: 1, description: null },
   { name: 'ห้องพักบัณฑิต 2', building: 5, floor: 2, description: null },
@@ -165,7 +164,7 @@ const roomsData = [
   { name: 'ห้องเครื่องมือ', building: 5, floor: 3, description: null },
   { name: 'ห้องพักอาจารย์ 2', building: 5, floor: 3, description: null },
 
-  // อาคาร 6
+
   { name: 'ห้องพักอาจารย์ 7 - 1', building: 6, floor: 1, description: null },
   { name: 'ห้องพักอาจารย์ 7 - 2', building: 6, floor: 1, description: null },
   { name: 'ห้องพักอาจารย์ 7 - 3', building: 6, floor: 1, description: null },
@@ -181,10 +180,10 @@ const roomsData = [
   { name: 'Co-working space - 7', building: 6, floor: 2, description: null },
   { name: 'ห้องบรรยายกระถินณรงค์', building: 6, floor: 2, description: null },
 
-  // อาคาร 7
+
   { name: 'ห้องฏิบัติการยาฉีด', building: 7, floor: 1, description: null },
 
-  // อาคาร 8
+
   { name: 'โรงงานเครื่องสำอางค์ 1', building: 8, floor: 1, description: null },
   { name: 'โรงงานเครื่องสำอางค์ 2', building: 8, floor: 1, description: null },
   { name: 'โรงงานเครื่องสำอางค์ 3', building: 8, floor: 1, description: null },
@@ -200,7 +199,7 @@ const roomsData = [
   { name: 'โรงงานเครื่องสำอางค์ 13', building: 8, floor: 1, description: null },
   { name: 'โรงงานเครื่องสำอางค์ 14', building: 8, floor: 1, description: null },
 
-  // พื้นที่พิเศษ
+
   { name: 'หอพระด้านหน้า', building: 9, floor: 1, description: 'หน้าคณะ' },
   { name: 'หอพักนักศึกษา', building: 9, floor: 1, description: 'หอพัก' }
 ];
@@ -218,7 +217,7 @@ async function createConnection() {
 
 async function createRoomsTable(connection) {
   try {
-    // สร้างตาราง rooms หากยังไม่มี
+
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS \`rooms\` (
         \`id\` int(11) NOT NULL AUTO_INCREMENT,
@@ -245,11 +244,11 @@ async function createRoomsTable(connection) {
 
 async function clearExistingRooms(connection) {
   try {
-    // ลบข้อมูลเก่าทั้งหมด
+
     await connection.execute('DELETE FROM rooms');
     console.log('✅ ลบข้อมูลห้องเก่าทั้งหมดสำเร็จ');
-    
-    // Reset AUTO_INCREMENT
+
+
     await connection.execute('ALTER TABLE rooms AUTO_INCREMENT = 1');
     console.log('✅ รีเซ็ต AUTO_INCREMENT สำเร็จ');
   } catch (error) {
@@ -261,25 +260,25 @@ async function clearExistingRooms(connection) {
 async function insertRoomsData(connection) {
   try {
     console.log(`\n📝 เริ่มนำเข้าข้อมูลห้อง ${roomsData.length} รายการ...`);
-    
-    // เตรียม SQL statement สำหรับ batch insert
+
+
     const insertQuery = `
       INSERT INTO rooms (name, building, floor, description, is_active)
       VALUES (?, ?, ?, ?, 1)
     `;
-    
+
     let insertedCount = 0;
     let skippedCount = 0;
     const duplicates = [];
-    
+
     for (const room of roomsData) {
       try {
-        // ตรวจสอบว่าห้องซ้ำหรือไม่
+
         const [existing] = await connection.execute(`
           SELECT id, name FROM rooms 
           WHERE name = ? AND building = ? AND floor = ?
         `, [room.name, room.building, room.floor]);
-        
+
         if (existing.length > 0) {
           duplicates.push({
             name: room.name,
@@ -290,34 +289,34 @@ async function insertRoomsData(connection) {
           skippedCount++;
           continue;
         }
-        
-        // เพิ่มห้องใหม่
+
+
         await connection.execute(insertQuery, [
           room.name,
           room.building,
           room.floor,
           room.description
         ]);
-        
+
         insertedCount++;
-        
-        // แสดงความคืบหน้าทุก 10 รายการ
+
+
         if (insertedCount % 10 === 0) {
           console.log(`📋 นำเข้าแล้ว ${insertedCount} รายการ...`);
         }
-        
+
       } catch (error) {
         console.error(`❌ เกิดข้อผิดพลาดในการเพิ่มห้อง "${room.name}":`, error.message);
         skippedCount++;
       }
     }
-    
+
     console.log(`\n✅ การนำเข้าข้อมูลเสร็จสิ้น!`);
     console.log(`📊 สรุปผลการนำเข้า:`);
     console.log(`   - เพิ่มสำเร็จ: ${insertedCount} รายการ`);
     console.log(`   - ข้ามไป (ซ้ำ): ${skippedCount} รายการ`);
     console.log(`   - รวม: ${insertedCount + skippedCount} รายการ`);
-    
+
     if (duplicates.length > 0) {
       console.log(`\n⚠️  รายการที่ซ้ำ (${duplicates.length} รายการ):`);
       duplicates.slice(0, 5).forEach(dup => {
@@ -327,9 +326,9 @@ async function insertRoomsData(connection) {
         console.log(`   ... และอีก ${duplicates.length - 5} รายการ`);
       }
     }
-    
+
     return { insertedCount, skippedCount, duplicates };
-    
+
   } catch (error) {
     console.error('❌ เกิดข้อผิดพลาดในการนำเข้าข้อมูล:', error);
     throw error;
@@ -339,13 +338,13 @@ async function insertRoomsData(connection) {
 async function verifyImportedData(connection) {
   try {
     console.log(`\n🔍 ตรวจสอบข้อมูลที่นำเข้า...`);
-    
-    // นับจำนวนห้องทั้งหมด
+
+
     const [totalRooms] = await connection.execute(`
       SELECT COUNT(*) as total FROM rooms WHERE is_active = 1
     `);
-    
-    // นับจำนวนห้องแยกตามอาคาร
+
+
     const [roomsByBuilding] = await connection.execute(`
       SELECT building, COUNT(*) as count
       FROM rooms 
@@ -353,8 +352,8 @@ async function verifyImportedData(connection) {
       GROUP BY building
       ORDER BY building
     `);
-    
-    // นับจำนวนห้องแยกตามชั้น
+
+
     const [roomsByFloor] = await connection.execute(`
       SELECT building, floor, COUNT(*) as count
       FROM rooms 
@@ -362,14 +361,14 @@ async function verifyImportedData(connection) {
       GROUP BY building, floor
       ORDER BY building, floor
     `);
-    
+
     console.log(`📊 จำนวนห้องทั้งหมด: ${totalRooms[0].total} ห้อง`);
-    
+
     console.log(`\n🏢 จำนวนห้องแยกตามอาคาร:`);
     roomsByBuilding.forEach(row => {
       console.log(`   - อาคาร ${row.building}: ${row.count} ห้อง`);
     });
-    
+
     console.log(`\n🏗️  จำนวนห้องแยกตามชั้น:`);
     let currentBuilding = null;
     roomsByFloor.forEach(row => {
@@ -377,13 +376,13 @@ async function verifyImportedData(connection) {
         console.log(`   อาคาร ${row.building}:`);
         currentBuilding = row.building;
       }
-      const floorLabel = row.floor === 0 ? 'ใต้ดิน' : 
-                        (row.building === 4 && row.floor === 6) ? 'ดาดฟ้า' : 
-                        `ชั้น ${row.floor}`;
+      const floorLabel = row.floor === 0 ? 'ใต้ดิน' :
+        (row.building === 4 && row.floor === 6) ? 'ดาดฟ้า' :
+          `ชั้น ${row.floor}`;
       console.log(`     - ${floorLabel}: ${row.count} ห้อง`);
     });
-    
-    // ตัวอย่างห้องแรกๆ
+
+
     const [sampleRooms] = await connection.execute(`
       SELECT id, name, building, floor, description
       FROM rooms 
@@ -391,15 +390,15 @@ async function verifyImportedData(connection) {
       ORDER BY building, floor, name
       LIMIT 5
     `);
-    
+
     console.log(`\n📋 ตัวอย่างห้องแรก 5 รายการ:`);
     sampleRooms.forEach(room => {
-      const floorText = room.floor === 0 ? 'ใต้ดิน' : 
-                       (room.building === 4 && room.floor === 6) ? 'ดาดฟ้า' : 
-                       `ชั้น ${room.floor}`;
+      const floorText = room.floor === 0 ? 'ใต้ดิน' :
+        (room.building === 4 && room.floor === 6) ? 'ดาดฟ้า' :
+          `ชั้น ${room.floor}`;
       console.log(`   ${room.id}. ${room.name} (อาคาร ${room.building} ${floorText})`);
     });
-    
+
   } catch (error) {
     console.error('❌ เกิดข้อผิดพลาดในการตรวจสอบข้อมูล:', error);
     throw error;
@@ -416,16 +415,16 @@ async function saveImportLog(results) {
       duplicates: results.duplicates.length,
       success: true
     };
-    
+
     const logPath = path.join(__dirname, '../logs/rooms_import.json');
-    
-    // สร้างโฟลเดอร์ logs หากไม่มี
+
+
     const logsDir = path.dirname(logPath);
     await fs.mkdir(logsDir, { recursive: true });
-    
+
     await fs.writeFile(logPath, JSON.stringify(logData, null, 2), 'utf8');
     console.log(`📁 บันทึก log ไฟล์ที่: ${logPath}`);
-    
+
   } catch (error) {
     console.warn('⚠️  ไม่สามารถบันทึก log ไฟล์ได้:', error.message);
   }
@@ -433,49 +432,49 @@ async function saveImportLog(results) {
 
 async function main() {
   let connection;
-  
+
   try {
     console.log('🚀 เริ่มต้นการนำเข้าข้อมูลห้อง...\n');
-    
-    // เชื่อมต่อฐานข้อมูล
+
+
     connection = await createConnection();
-    
-    // สร้างตาราง
+
+
     await createRoomsTable(connection);
-    
-    // ถามผู้ใช้ว่าต้องการลบข้อมูลเก่าหรือไม่
+
+
     const readline = require('readline');
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout
     });
-    
+
     const clearData = await new Promise((resolve) => {
       rl.question('🗑️  ต้องการลบข้อมูลห้องเก่าทั้งหมดหรือไม่? (y/N): ', (answer) => {
         rl.close();
         resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
       });
     });
-    
+
     if (clearData) {
       await clearExistingRooms(connection);
     }
-    
-    // นำเข้าข้อมูล
+
+
     const results = await insertRoomsData(connection);
-    
-    // ตรวจสอบข้อมูล
+
+
     await verifyImportedData(connection);
-    
-    // บันทึก log
+
+
     await saveImportLog(results);
-    
+
     console.log(`\n🎉 การนำเข้าข้อมูลเสร็จสิ้นเรียบร้อย!`);
-    
+
   } catch (error) {
     console.error('\n💥 เกิดข้อผิดพลาดในการนำเข้าข้อมูล:', error);
     process.exit(1);
-    
+
   } finally {
     if (connection) {
       await connection.end();
@@ -484,7 +483,7 @@ async function main() {
   }
 }
 
-// รันสคริปต์หากถูกเรียกใช้โดยตรง
+
 if (require.main === module) {
   main().catch(console.error);
 }

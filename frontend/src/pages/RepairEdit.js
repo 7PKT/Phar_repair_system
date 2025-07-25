@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:5000';
-
 const RepairEdit = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -90,7 +89,7 @@ const RepairEdit = () => {
   const createPlaceholderImage = () => {
     return `data:image/svg+xml;base64,${btoa(`
       <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100%" height="100%" fill="#f3f4f6"/>
+              <rect width="100%" height="100%" fill="#f3f4f6"/>
         <g>
           <rect x="35" y="25" width="30" height="20" fill="#d1d5db" rx="2"/>
           <circle cx="42" cy="32" r="3" fill="#9ca3af"/>
@@ -153,9 +152,7 @@ const RepairEdit = () => {
     }
   }, [formData.building, formData.floor]);
 
-  // เพิ่ม useEffect ใหม่ตรงนี้
   useEffect(() => {
-    // เมื่อ rooms โหลดเสร็จแล้ว ตรวจสอบว่าห้องที่เลือกไว้ยังอยู่ในรายการหรือไม่
     if (rooms.length > 0 && formData.room && selectedRoomName) {
       const foundRoom = rooms.find(room =>
         room.name === selectedRoomName ||
@@ -163,7 +160,6 @@ const RepairEdit = () => {
       );
 
       if (foundRoom) {
-        // ถ้าเจอห้องในรายการ ให้อัปเดต formData.room เป็น ID
         if (formData.room !== foundRoom.id.toString()) {
           setFormData(prev => ({
             ...prev,
@@ -171,10 +167,8 @@ const RepairEdit = () => {
           }));
         }
       }
-      // ถ้าไม่เจอ ให้เก็บค่าเดิมไว้ (formData.room จะยังคงเป็นชื่อห้องเดิม)
     }
-  }, [rooms, selectedRoomName]); // ไม่ใส่ formData.room ใน dependency เพื่อหลีกเลี่ยง infinite loop
-
+  }, [rooms, selectedRoomName]);
   const fetchRooms = async (building, floor) => {
     try {
       setRoomsLoading(true);
@@ -213,8 +207,6 @@ const RepairEdit = () => {
     }
   };
 
-  // ฟังก์ชันแก้ไขการแยกชื่อห้องจาก location string ใน RepairEdit.js
-  // แทนที่โค้ดเดิมในส่วน fetchRepairData
 
   const parseLocationString = (locationString, buildings) => {
     let building = '';
@@ -233,7 +225,6 @@ const RepairEdit = () => {
     } else {
       detectedLocationType = 'indoor';
 
-      // หาอาคารจาก location string
       for (const [buildingId, buildingData] of Object.entries(buildings)) {
         if (locationString.includes(buildingData.name)) {
           building = buildingId;
@@ -241,7 +232,6 @@ const RepairEdit = () => {
         }
       }
 
-      // หาชั้น
       if (locationString.includes('ใต้ดิน')) {
         floor = '0';
       } else if (locationString.includes('ดาดฟ้า')) {
@@ -253,14 +243,12 @@ const RepairEdit = () => {
         }
       }
 
-      // หาห้อง - ปรับปรุงการดึงชื่อห้องให้ครบถ้วน
       if (building && floor !== '') {
         const buildingName = buildings[building].name;
         const floorText = floor === '0' ? 'ใต้ดิน' :
           building === '4' && floor === '6' ? 'ดาดฟ้า' :
             `ชั้น ${floor}`;
 
-        // สร้าง pattern ที่แม่นยำยิ่งขึ้น
         const prefixPattern = `${buildingName}\\s+${floorText}\\s+`;
         const regex = new RegExp(prefixPattern + '(.+?)$');
         const match = locationString.match(regex);
@@ -268,10 +256,8 @@ const RepairEdit = () => {
         if (match && match[1]) {
           room = match[1].trim();
         } else {
-          // ถ้าไม่เจอด้วย regex ให้ใช้วิธีแยกด้วย split
           const parts = locationString.split(' ');
           if (parts.length > 2) {
-            // ค้นหา index ที่เริ่มต้นหลังจากอาคารและชั้น
             const buildingIndex = parts.findIndex(part => part === buildingName.split(' ')[0]);
             const floorPart = floor === '0' ? 'ใต้ดิน' :
               building === '4' && floor === '6' ? 'ดาดฟ้า' :
@@ -279,7 +265,6 @@ const RepairEdit = () => {
             const floorIndex = parts.findIndex((part, idx) => idx > buildingIndex && part === floorPart);
 
             if (floorIndex !== -1) {
-              // เอาทุกอย่างหลังจากข้อมูลชั้น
               const roomParts = parts.slice(floorIndex + (floorPart === 'ชั้น' ? 2 : 1));
               room = roomParts.join(' ').trim();
             }
@@ -291,7 +276,6 @@ const RepairEdit = () => {
     return { building, floor, room, outdoor_location, detectedLocationType };
   };
 
-  // ฟังก์ชันปรับปรุง fetchRepairData
   const fetchRepairData = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
@@ -309,7 +293,6 @@ const RepairEdit = () => {
         return;
       }
 
-      // ใช้ฟังก์ชันใหม่ในการแยกข้อมูล location
       const {
         building,
         floor,
@@ -320,25 +303,21 @@ const RepairEdit = () => {
 
       setLocationType(detectedLocationType);
 
-      // ตั้งค่าข้อมูลเริ่มต้น
       setFormData({
         title: repair.title || '',
         description: repair.description || '',
         category_id: repair.category_id || '',
         building: building,
         floor: floor,
-        room: parsedRoom, // ใช้ชื่อห้องที่แยกได้แล้ว
-        outdoor_location: outdoor_location,
+        room: parsedRoom, outdoor_location: outdoor_location,
         priority: repair.priority || 'medium',
         status: repair.status || 'pending',
         assigned_to: repair.assigned_to || '',
         completion_details: repair.completion_details || ''
       });
 
-      // ตั้งค่าชื่อห้องที่เลือก
       setSelectedRoomName(parsedRoom);
 
-      // ถ้ามีอาคารและชั้น ให้ดึงข้อมูลห้องจากฐานข้อมูล
       if (building && floor !== '') {
         try {
           const roomsResponse = await axios.get(`${API_BASE_URL}/api/rooms/by-building-floor?building=${building}&floor=${floor}`, {
@@ -352,7 +331,6 @@ const RepairEdit = () => {
             const availableRooms = roomsResponse.data.data;
             setRooms(availableRooms);
 
-            // ตรวจสอบว่าห้องที่แยกได้อยู่ในรายการหรือไม่
             const foundRoom = availableRooms.find(room =>
               room.name === parsedRoom ||
               room.name.toLowerCase() === parsedRoom.toLowerCase() ||
@@ -360,18 +338,15 @@ const RepairEdit = () => {
             );
 
             if (foundRoom) {
-              // ถ้าเจอในฐานข้อมูล ให้ใช้ ID
               setFormData(prev => ({
                 ...prev,
                 room: foundRoom.id.toString()
               }));
               setSelectedRoomName(foundRoom.name);
             } else {
-              // ถ้าไม่เจอในฐานข้อมูล ให้เก็บชื่อห้องเดิม
               setSelectedRoomName(parsedRoom);
             }
           } else {
-            // ถ้าไม่มีห้องในฐานข้อมูล ให้เก็บชื่อเดิม
             setRooms([]);
             setSelectedRoomName(parsedRoom);
           }
@@ -382,7 +357,6 @@ const RepairEdit = () => {
         }
       }
 
-      // จัดการรูปภาพ (เหมือนเดิม)
       const processedImages = [];
       if (repair.images && Array.isArray(repair.images) && repair.images.length > 0) {
         repair.images.forEach((img, index) => {
@@ -601,23 +575,18 @@ const RepairEdit = () => {
         ...formData,
         [name]: value,
         floor: ''
-        // ไม่ reset room ให้เก็บค่าเดิมไว้
       });
       setRooms([]);
-      // ไม่ reset selectedRoomName ด้วย เพื่อให้แสดงชื่อห้องเดิม
     } else if (name === 'floor') {
       setFormData({
         ...formData,
         [name]: value
-        // ไม่ reset room ให้เก็บค่าเดิมไว้
       });
-      // ไม่ reset selectedRoomName ด้วย เพื่อให้แสดงชื่อห้องเดิม
     } else if (name === 'room') {
       setFormData({
         ...formData,
         [name]: value
       });
-      // อัปเดตชื่อห้องที่เลือก
       if (rooms.length > 0) {
         const selectedRoom = rooms.find(room => room.id.toString() === value);
         if (selectedRoom) {
@@ -912,12 +881,10 @@ const RepairEdit = () => {
       if (locationType === 'indoor') {
         let roomName;
 
-        // ตรวจสอบว่า room เป็น ID หรือชื่อ
         if (rooms.length > 0) {
           const selectedRoom = rooms.find(room => room.id === parseInt(formData.room));
           roomName = selectedRoom ? selectedRoom.name : formData.room;
         } else {
-          // ถ้าไม่มีข้อมูลห้องจากฐานข้อมูล ให้ใช้ค่าจาก formData
           roomName = formData.room;
         }
 
@@ -975,7 +942,6 @@ const RepairEdit = () => {
         timeout: 300000,
       });
 
-      // ใช้ endpoint เดียวกันสำหรับทุกคน แต่ส่งข้อมูลต่างกัน
       const response = await apiClient.put(`${API_BASE_URL}/api/repairs/${id}`, submitData, {
         headers: {
           'Content-Type': 'multipart/form-data',
