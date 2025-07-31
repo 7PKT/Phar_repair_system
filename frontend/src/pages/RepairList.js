@@ -57,8 +57,7 @@ const RepairList = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [activeView, setActiveView] = useState("active");
 
-  // ตรวจจับขนาดหน้าจอ
-  useEffect(() => {
+     useEffect(() => {
     const checkScreenSize = () => {
       setIsMobile(window.innerWidth < 768);
     };
@@ -68,19 +67,14 @@ const RepairList = () => {
   }, []);
 
   useEffect(() => {
-    // รอให้ user data พร้อมก่อน
-    if (user && user.id && user.role) {
+         if (user && user.id && user.role) {
       fetchRepairs();
       fetchCategories();
       fetchTechnicians();
     }
   }, [user]);
 
-  // ไม่ต้อง fetch ใหม่เมื่อ filter เปลี่ยน เพราะเราจะกรองใน frontend
-  // useEffect(() => {
-  //   fetchRepairs();
-  // }, [statusFilter, priorityFilter, categoryFilter, technicianFilter, dateRangeFilter]);
-
+            
   const fetchCategories = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -128,8 +122,7 @@ const RepairList = () => {
         return;
       }
 
-      // ตรวจสอบว่า user data พร้อมใช้งานแล้วหรือไม่
-      if (!user || !user.id || !user.role) {
+             if (!user || !user.id || !user.role) {
         console.log("User data not ready, skipping fetch");
         return;
       }
@@ -146,12 +139,10 @@ const RepairList = () => {
       console.log("User role:", user?.role);
       console.log("User ID:", user?.id);
 
-      // กรองข้อมูลตาม role ของผู้ใช้
-      let filteredRepairs = [];
+             let filteredRepairs = [];
 
       if (user.role === "user") {
-        // user เห็นเฉพาะรายการที่ตนเองแจ้งซ่อม - ตรวจสอบทั้ง requester_id และ user_id
-        filteredRepairs = repairsData.filter(repair => {
+                 filteredRepairs = repairsData.filter(repair => {
           const isOwner = repair.requester_id === user.id || 
                          repair.user_id === user.id ||
                          repair.created_by === user.id;
@@ -162,13 +153,11 @@ const RepairList = () => {
         console.log("Filtered repairs for user:", filteredRepairs);
         console.log(`User ${user.id} can see ${filteredRepairs.length} out of ${repairsData.length} repairs`);
       } else if (user.role === "technician") {
-        // technician เห็นเฉพาะรายการที่ได้รับมอบหมายแล้ว (ไม่เห็นรายการ pending ที่ยังไม่มีคนรับ)
-        filteredRepairs = repairsData.filter(repair => repair.assigned_to === user.id);
+                 filteredRepairs = repairsData.filter(repair => repair.assigned_to === user.id);
         console.log("Filtered repairs for technician:", filteredRepairs);
         console.log(`Technician ${user.id} can see ${filteredRepairs.length} assigned repairs out of ${repairsData.length} total repairs`);
       } else if (user.role === "admin") {
-        // admin เห็นรายการทั้งหมด
-        filteredRepairs = repairsData;
+                 filteredRepairs = repairsData;
         console.log("All repairs for admin:", filteredRepairs);
       }
 
@@ -366,8 +355,8 @@ const RepairList = () => {
       const url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
 
-      const fileName = `${titlePrefix}_${getViewModeText(activeView)}_${new Date().toLocaleDateString("th-TH").replace(/\//g, "-")}.xls`;
-      link.setAttribute("download", fileName);
+     const fileName = `${titlePrefix}_${getViewModeText(activeView)}_${new Date().toLocaleDateString("th-TH").replace(/\//g, "-")}.xls`;
+     link.setAttribute("download", fileName);
       link.style.visibility = "hidden";
 
       document.body.appendChild(link);
@@ -476,8 +465,7 @@ const RepairList = () => {
     return false;
   };
 
-  // แสดง title ที่เหมาะสมตาม role
-  const getPageTitle = () => {
+     const getPageTitle = () => {
     if (user?.role === "admin") {
       return "รายการแจ้งซ่อมทั้งหมด";
     } else if (user?.role === "technician") {
@@ -487,8 +475,7 @@ const RepairList = () => {
     }
   };
 
-  // Filter repairs by view mode
-  const filteredRepairsByView = repairs.filter((repair) => {
+     const filteredRepairsByView = repairs.filter((repair) => {
     if (activeView === "active") {
       return repair.status !== "completed" && repair.status !== "cancelled";
     } else if (activeView === "completed") {
@@ -588,8 +575,7 @@ const RepairList = () => {
     return 0;
   });
 
-  // Pagination
-  const totalPages = Math.ceil(filteredAndSortedRepairs.length / itemsPerPage);
+     const totalPages = Math.ceil(filteredAndSortedRepairs.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentRepairs = filteredAndSortedRepairs.slice(startIndex, endIndex);
@@ -599,8 +585,7 @@ const RepairList = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Mobile Header Content
-  const mobileHeaderContent = (
+     const mobileHeaderContent = (
     <div className="flex items-center justify-between w-full">
       <div className="flex items-center space-x-2">
         <button
@@ -714,8 +699,7 @@ const RepairList = () => {
     );
   }
 
-  // Card Component for Grid View
-  const RepairCard = ({ repair }) => (
+     const RepairCard = ({ repair }) => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center space-x-2">

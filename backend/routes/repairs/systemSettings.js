@@ -1,11 +1,11 @@
-// routes/repairs/system-settings.js (Updated with LINE refresh)
+
 const express = require('express');
 const db = require('../../config/database');
 const { authenticateToken, requireRole } = require('../../middleware/auth');
 
 const router = express.Router();
 
-// ✅ Import LINE Messaging service
+
 let lineMessaging = null;
 try {
     lineMessaging = require('../../services/lineMessaging');
@@ -133,7 +133,7 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res) => {
             
             if (!setting_key) continue;
 
-            // ตรวจสอบว่ามีการแก้ไข LINE settings หรือไม่
+            
             if (setting_key.startsWith('line_') || setting_key.startsWith('notification_')) {
                 hasLineSettings = true;
             }
@@ -150,7 +150,7 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res) => {
             successCount++;
         }
 
-        // ✅ รีเฟรช LINE Config หลังจากอัพเดท LINE settings
+        
         if (hasLineSettings && lineMessaging) {
             try {
                 console.log('🔄 Refreshing LINE config after settings update...');
@@ -184,9 +184,9 @@ router.post('/test/line-notification', authenticateToken, requireRole(['admin'])
         
         console.log('🧪 กำลังทดสอบการแจ้งเตือน LINE...');
 
-        // ✅ ใช้ LINE Messaging Service แทนการเรียก API โดยตรง
+        
         if (lineMessaging) {
-            // รีเฟรช config ก่อนทดสอบ
+            
             await lineMessaging.refreshConfig();
 
             if (!lineMessaging.isEnabled()) {
@@ -208,7 +208,7 @@ router.post('/test/line-notification', authenticateToken, requireRole(['admin'])
                 });
             }
 
-            // สร้างข้อมูลทดสอบ
+            
             const testData = {
                 id: 999999,
                 title: title || 'ทดสอบการแจ้งซ่อม',
@@ -221,7 +221,7 @@ router.post('/test/line-notification', authenticateToken, requireRole(['admin'])
 
             console.log('📤 Testing with data:', testData);
 
-            // ใช้ LINE Messaging Service
+            
             const result = await lineMessaging.notifyNewRepairRequest(testData);
 
             if (result.success) {
@@ -238,7 +238,7 @@ router.post('/test/line-notification', authenticateToken, requireRole(['admin'])
                 });
             }
         } else {
-            // Fallback เมื่อไม่มี LINE Messaging Service
+            
             const [lineSettings] = await db.execute(`
                 SELECT setting_key, setting_value 
                 FROM system_settings 

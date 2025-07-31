@@ -17,9 +17,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 
-// ✅ กำหนด API base URL
 const API_BASE_URL = 'http://localhost:5000';
-
 const RepairEdit = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -28,15 +26,17 @@ const RepairEdit = () => {
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState([]);
   const [technicians, setTechnicians] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
   const [selectedImages, setSelectedImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
   const [currentImages, setCurrentImages] = useState([]);
-  
-  // ✅ เพิ่ม state สำหรับรูปภาพเสร็จสิ้น
+
   const [completionImages, setCompletionImages] = useState([]);
   const [completionImagePreviews, setCompletionImagePreviews] = useState([]);
   const [currentCompletionImages, setCurrentCompletionImages] = useState([]);
-  
+  const [selectedRoomName, setSelectedRoomName] = useState('');
+
   const [locationType, setLocationType] = useState('');
   const [isMobile, setIsMobile] = useState(false);
 
@@ -59,14 +59,14 @@ const RepairEdit = () => {
   }, []);
 
   const buildings = {
-    1: { name: 'อาคาร 1', floors: 2 },
+    1: { name: 'อาคาร 1', floors: 3 },
     2: { name: 'อาคาร 2', floors: 4 },
     3: { name: 'อาคาร 3', floors: 5 },
-    4: { name: 'อาคาร 4', floors: 5 },
+    4: { name: 'อาคาร 4', floors: 6 },
     5: { name: 'อาคาร 5', floors: 4 },
     6: { name: 'อาคาร 6', floors: 2 },
-    7: { name: 'อาคาร 7', floors: 5 },
-    8: { name: 'อาคาร 8', floors: 2 },
+    7: { name: 'อาคาร 7', floors: 1 },
+    8: { name: 'อาคาร 8', floors: 1 },
     9: { name: 'อาคาร 9', floors: 1 }
   };
 
@@ -86,11 +86,10 @@ const RepairEdit = () => {
 
   const [errors, setErrors] = useState({});
 
-  // ✅ สร้าง placeholder image แบบ inline SVG
   const createPlaceholderImage = () => {
     return `data:image/svg+xml;base64,${btoa(`
       <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100%" height="100%" fill="#f3f4f6"/>
+              <rect width="100%" height="100%" fill="#f3f4f6"/>
         <g>
           <rect x="35" y="25" width="30" height="20" fill="#d1d5db" rx="2"/>
           <circle cx="42" cy="32" r="3" fill="#9ca3af"/>
@@ -110,9 +109,9 @@ const RepairEdit = () => {
       ghost: "hover:bg-gray-100 active:bg-gray-200 text-gray-700",
       outline: "border-2 border-blue-600 text-blue-600 hover:bg-blue-50 active:bg-blue-100"
     };
-    
+
     const touchSizeClasses = isMobile ? "min-h-[48px] min-w-[48px] px-4 py-3" : "px-4 py-2";
-    
+
     return (
       <button
         type={type}
@@ -127,7 +126,7 @@ const RepairEdit = () => {
           ${isMobile ? 'text-base font-medium' : 'text-sm'}
           rounded-lg flex items-center justify-center
         `}
-        style={{ 
+        style={{
           WebkitTapHighlightColor: 'transparent',
           touchAction: 'manipulation'
         }}
@@ -145,6 +144,138 @@ const RepairEdit = () => {
     }
   }, [id, user?.role]);
 
+  useEffect(() => {
+    if (formData.building && formData.floor !== '') {
+      fetchRooms(formData.building, formData.floor);
+    } else {
+      setRooms([]);
+    }
+  }, [formData.building, formData.floor]);
+
+  useEffect(() => {
+    if (rooms.length > 0 && formData.room && selectedRoomName) {
+      const foundRoom = rooms.find(room =>
+        room.name === selectedRoomName ||
+        room.id.toString() === formData.room
+      );
+
+      if (foundRoom) {
+        if (formData.room !== foundRoom.id.toString()) {
+          setFormData(prev => ({
+            ...prev,
+            room: foundRoom.id.toString()
+          }));
+        }
+      }
+    }
+  }, [rooms, selectedRoomName]);
+  const fetchRooms = async (building, floor) => {
+    try {
+      setRoomsLoading(true);
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        toast.error('ไม่พบ token การเข้าสู่ระบบ');
+        navigate('/login');
+        return;
+      }
+
+      const response = await axios.get(`${API_BASE_URL}/api/rooms/by-building-floor?building=${building}&floor=${floor}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data.success) {
+        setRooms(response.data.data || []);
+      } else {
+        setRooms([]);
+      }
+    } catch (error) {
+      console.error('Error fetching rooms:', error);
+      setRooms([]);
+
+      if (error.response?.status === 401) {
+        toast.error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
+        navigate('/login');
+      } else if (error.response?.status !== 404) {
+        toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูลห้อง');
+      }
+    } finally {
+      setRoomsLoading(false);
+    }
+  };
+
+
+  const parseLocationString = (locationString, buildings) => {
+    let building = '';
+    let floor = '';
+    let room = '';
+    let outdoor_location = '';
+    let detectedLocationType = '';
+
+    if (!locationString) {
+      return { building, floor, room, outdoor_location, detectedLocationType };
+    }
+
+    if (locationString.includes('ภายนอกอาคาร:')) {
+      detectedLocationType = 'outdoor';
+      outdoor_location = locationString.replace('ภายนอกอาคาร:', '').trim();
+    } else {
+      detectedLocationType = 'indoor';
+
+      for (const [buildingId, buildingData] of Object.entries(buildings)) {
+        if (locationString.includes(buildingData.name)) {
+          building = buildingId;
+          break;
+        }
+      }
+
+      if (locationString.includes('ใต้ดิน')) {
+        floor = '0';
+      } else if (locationString.includes('ดาดฟ้า')) {
+        floor = '6';
+      } else {
+        const floorMatch = locationString.match(/ชั้น\s*(\d+)/);
+        if (floorMatch) {
+          floor = floorMatch[1];
+        }
+      }
+
+      if (building && floor !== '') {
+        const buildingName = buildings[building].name;
+        const floorText = floor === '0' ? 'ใต้ดิน' :
+          building === '4' && floor === '6' ? 'ดาดฟ้า' :
+            `ชั้น ${floor}`;
+
+        const prefixPattern = `${buildingName}\\s+${floorText}\\s+`;
+        const regex = new RegExp(prefixPattern + '(.+?)$');
+        const match = locationString.match(regex);
+
+        if (match && match[1]) {
+          room = match[1].trim();
+        } else {
+          const parts = locationString.split(' ');
+          if (parts.length > 2) {
+            const buildingIndex = parts.findIndex(part => part === buildingName.split(' ')[0]);
+            const floorPart = floor === '0' ? 'ใต้ดิน' :
+              building === '4' && floor === '6' ? 'ดาดฟ้า' :
+                'ชั้น';
+            const floorIndex = parts.findIndex((part, idx) => idx > buildingIndex && part === floorPart);
+
+            if (floorIndex !== -1) {
+              const roomParts = parts.slice(floorIndex + (floorPart === 'ชั้น' ? 2 : 1));
+              room = roomParts.join(' ').trim();
+            }
+          }
+        }
+      }
+    }
+
+    return { building, floor, room, outdoor_location, detectedLocationType };
+  };
+
   const fetchRepairData = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
@@ -153,62 +284,79 @@ const RepairEdit = () => {
           Authorization: `Bearer ${token}`
         }
       });
-      
+
       const repair = response.data;
-      
+
       if (!canEdit(repair)) {
         toast.error('คุณไม่มีสิทธิ์แก้ไขรายการนี้');
         navigate(`/repairs/${id}`);
         return;
       }
 
-      let building = '';
-      let floor = '';
-      let room = '';
-      let outdoor_location = '';
-      let detectedLocationType = '';
-      
-      if (repair.location) {
-        if (repair.location.includes('ภายนอกอาคาร:')) {
-          detectedLocationType = 'outdoor';
-          outdoor_location = repair.location.replace('ภายนอกอาคาร:', '').trim();
-        } else {
-          detectedLocationType = 'indoor';
-          for (const [buildingId, buildingData] of Object.entries(buildings)) {
-            if (repair.location.includes(buildingData.name)) {
-              building = buildingId;
-              break;
-            }
-          }
-          
-          const floorMatch = repair.location.match(/ชั้น\s*(\d+)/);
-          if (floorMatch) {
-            floor = floorMatch[1];
-          }
-          
-          const roomMatch = repair.location.match(/ห้อง\s*(.+?)(?:\s|$)/);
-          if (roomMatch) {
-            room = roomMatch[1].trim();
-          }
-        }
-      }
+      const {
+        building,
+        floor,
+        room: parsedRoom,
+        outdoor_location,
+        detectedLocationType
+      } = parseLocationString(repair.location, buildings);
 
       setLocationType(detectedLocationType);
+
       setFormData({
         title: repair.title || '',
         description: repair.description || '',
         category_id: repair.category_id || '',
         building: building,
         floor: floor,
-        room: room,
-        outdoor_location: outdoor_location,
+        room: parsedRoom, outdoor_location: outdoor_location,
         priority: repair.priority || 'medium',
         status: repair.status || 'pending',
         assigned_to: repair.assigned_to || '',
         completion_details: repair.completion_details || ''
       });
 
-      // ✅ จัดการรูปภาพทั่วไป
+      setSelectedRoomName(parsedRoom);
+
+      if (building && floor !== '') {
+        try {
+          const roomsResponse = await axios.get(`${API_BASE_URL}/api/rooms/by-building-floor?building=${building}&floor=${floor}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (roomsResponse.data.success && roomsResponse.data.data.length > 0) {
+            const availableRooms = roomsResponse.data.data;
+            setRooms(availableRooms);
+
+            const foundRoom = availableRooms.find(room =>
+              room.name === parsedRoom ||
+              room.name.toLowerCase() === parsedRoom.toLowerCase() ||
+              room.name.replace(/\s+/g, ' ').trim() === parsedRoom.replace(/\s+/g, ' ').trim()
+            );
+
+            if (foundRoom) {
+              setFormData(prev => ({
+                ...prev,
+                room: foundRoom.id.toString()
+              }));
+              setSelectedRoomName(foundRoom.name);
+            } else {
+              setSelectedRoomName(parsedRoom);
+            }
+          } else {
+            setRooms([]);
+            setSelectedRoomName(parsedRoom);
+          }
+        } catch (roomError) {
+          console.error('Error fetching rooms:', roomError);
+          setRooms([]);
+          setSelectedRoomName(parsedRoom);
+        }
+      }
+
       const processedImages = [];
       if (repair.images && Array.isArray(repair.images) && repair.images.length > 0) {
         repair.images.forEach((img, index) => {
@@ -221,7 +369,7 @@ const RepairEdit = () => {
           });
         });
       }
-      
+
       if (repair.image_path && !processedImages.some(img => img.file_path === repair.image_path)) {
         processedImages.push({
           id: 'legacy',
@@ -231,12 +379,11 @@ const RepairEdit = () => {
           type: 'legacy'
         });
       }
-      
+
       setCurrentImages(processedImages);
       setSelectedImages([]);
       setImagePreviews([]);
 
-      // ✅ จัดการรูปภาพเสร็จสิ้น
       const processedCompletionImages = [];
       if (repair.completion_images && Array.isArray(repair.completion_images) && repair.completion_images.length > 0) {
         repair.completion_images.forEach((img, index) => {
@@ -249,11 +396,11 @@ const RepairEdit = () => {
           });
         });
       }
-      
+
       setCurrentCompletionImages(processedCompletionImages);
       setCompletionImages([]);
       setCompletionImagePreviews([]);
-      
+
     } catch (error) {
       console.error('Fetch repair data error:', error);
       toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
@@ -319,7 +466,7 @@ const RepairEdit = () => {
   const fetchTechnicians = async () => {
     try {
       const token = localStorage.getItem('token');
-      
+
       let response;
       try {
         response = await axios.get(`${API_BASE_URL}/api/repairs/technicians`, {
@@ -330,7 +477,7 @@ const RepairEdit = () => {
           response = await axios.get(`${API_BASE_URL}/api/admin/users`, {
             headers: { Authorization: `Bearer ${token}` }
           });
-          
+
           response.data = response.data.filter(u =>
             u.role === 'technician' || u.role === 'admin'
           );
@@ -339,7 +486,7 @@ const RepairEdit = () => {
           return;
         }
       }
-      
+
       setTechnicians(response.data || []);
     } catch (error) {
       setTechnicians([]);
@@ -348,10 +495,15 @@ const RepairEdit = () => {
 
   const canEdit = (repair) => {
     if (!user) return false;
-    
-    if (user.role === 'admin' || user.role === 'technician') {
+
+    if (user.role === 'admin') {
       return true;
     }
+
+    if (user.role === 'technician') {
+      return true;
+    }
+
     if (user.role === 'user' && repair.requester_id === user.id) {
       return repair.status === 'pending';
     }
@@ -361,57 +513,54 @@ const RepairEdit = () => {
   const validateForm = () => {
     const newErrors = {};
 
-    if (user?.role === 'user') {
-      if (!formData.title.trim()) {
-        newErrors.title = 'กรุณากรอกหัวข้อ';
-      } else if (formData.title.trim().length < 5) {
-        newErrors.title = 'หัวข้อต้องมีความยาวอย่างน้อย 5 ตัวอักษร';
-      } else if (formData.title.trim().length > 200) {
-        newErrors.title = 'หัวข้อต้องมีความยาวไม่เกิน 200 ตัวอักษร';
-      }
-
-      if (!formData.description.trim()) {
-        newErrors.description = 'กรุณากรอกรายละเอียด';
-      } else if (formData.description.trim().length < 10) {
-        newErrors.description = 'รายละเอียดต้องมีความยาวอย่างน้อย 10 ตัวอักษร';
-      }
-
-      if (!formData.category_id) {
-        newErrors.category_id = 'กรุณาเลือกหมวดหมู่';
-      }
-
-      if (!locationType) {
-        newErrors.location = 'กรุณาเลือกประเภทสถานที่';
-      }
-
-      if (locationType === 'indoor') {
-        if (!formData.building) {
-          newErrors.building = 'กรุณาเลือกอาคาร';
-        }
-        if (!formData.floor) {
-          newErrors.floor = 'กรุณาเลือกชั้น';
-        }
-        if (!formData.room.trim()) {
-          newErrors.room = 'กรุณากรอกห้อง';
-        }
-      } else if (locationType === 'outdoor') {
-        if (!formData.outdoor_location.trim()) {
-          newErrors.outdoor_location = 'กรุณากรอกรายละเอียดสถานที่';
-        } else if (formData.outdoor_location.trim().length < 5) {
-          newErrors.outdoor_location = 'รายละเอียดสถานที่ต้องมีความยาวอย่างน้อย 5 ตัวอักษร';
-        }
-      }
-
-      if (!formData.priority) {
-        newErrors.priority = 'กรุณาเลือกระดับความสำคัญ';
-      }
-    }
-
-    // ✅ ตรวจสอบการเปลี่ยนสถานะเป็นเสร็จสิ้น
     if (formData.status === 'completed') {
       if (!formData.completion_details || !formData.completion_details.trim()) {
         newErrors.completion_details = 'กรุณาใส่รายละเอียดการซ่อมเมื่อเปลี่ยนสถานะเป็นเสร็จสิ้น';
       }
+    }
+
+    if (!formData.title.trim()) {
+      newErrors.title = 'กรุณากรอกหัวข้อ';
+    } else if (formData.title.trim().length < 5) {
+      newErrors.title = 'หัวข้อต้องมีความยาวอย่างน้อย 5 ตัวอักษร';
+    } else if (formData.title.trim().length > 200) {
+      newErrors.title = 'หัวข้อต้องมีความยาวไม่เกิน 200 ตัวอักษร';
+    }
+
+    if (!formData.description.trim()) {
+      newErrors.description = 'กรุณากรอกรายละเอียด';
+    } else if (formData.description.trim().length < 10) {
+      newErrors.description = 'รายละเอียดต้องมีความยาวอย่างน้อย 10 ตัวอักษร';
+    }
+
+    if (!formData.category_id) {
+      newErrors.category_id = 'กรุณาเลือกหมวดหมู่';
+    }
+
+    if (!locationType) {
+      newErrors.location = 'กรุณาเลือกประเภทสถานที่';
+    }
+
+    if (locationType === 'indoor') {
+      if (!formData.building) {
+        newErrors.building = 'กรุณาเลือกอาคาร';
+      }
+      if (formData.floor === '') {
+        newErrors.floor = 'กรุณาเลือกชั้น';
+      }
+      if (!formData.room && !selectedRoomName) {
+        newErrors.room = 'กรุณาเลือกห้อง';
+      }
+    } else if (locationType === 'outdoor') {
+      if (!formData.outdoor_location.trim()) {
+        newErrors.outdoor_location = 'กรุณากรอกรายละเอียดสถานที่';
+      } else if (formData.outdoor_location.trim().length < 5) {
+        newErrors.outdoor_location = 'รายละเอียดสถานที่ต้องมีความยาวอย่างน้อย 5 ตัวอักษร';
+      }
+    }
+
+    if (!formData.priority) {
+      newErrors.priority = 'กรุณาเลือกระดับความสำคัญ';
     }
 
     setErrors(newErrors);
@@ -420,24 +569,38 @@ const RepairEdit = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    
+
     if (name === 'building') {
       setFormData({
         ...formData,
         [name]: value,
         floor: ''
       });
-    } else {
+      setRooms([]);
+    } else if (name === 'floor') {
       setFormData({
         ...formData,
         [name]: value
       });
-    }
-
-    if (errors[name]) {
-      setErrors({
-        ...errors,
-        [name]: ''
+    } else if (name === 'room') {
+      setFormData({
+        ...formData,
+        [name]: value
+      });
+      if (rooms.length > 0) {
+        const selectedRoom = rooms.find(room => room.id.toString() === value);
+        if (selectedRoom) {
+          setSelectedRoomName(selectedRoom.name);
+        } else {
+          setSelectedRoomName(value);
+        }
+      } else {
+        setSelectedRoomName(value);
+      }
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
       });
     }
   };
@@ -451,6 +614,7 @@ const RepairEdit = () => {
       room: '',
       outdoor_location: ''
     });
+    setRooms([]);
     const newErrors = { ...errors };
     delete newErrors.building;
     delete newErrors.floor;
@@ -462,14 +626,14 @@ const RepairEdit = () => {
 
   const handleImageChange = (event) => {
     const files = Array.from(event.target.files);
-    
+
     if (files.length === 0) return;
 
     const validFiles = [];
     const newPreviews = [];
     const maxFileSize = 5 * 1024 * 1024;
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    
+
     let processedCount = 0;
     const totalFiles = files.length;
 
@@ -479,12 +643,12 @@ const RepairEdit = () => {
           const updatedImages = [...prev, ...validFiles];
           return updatedImages;
         });
-        
+
         setImagePreviews(prev => {
           const updatedPreviews = [...prev, ...newPreviews];
           return updatedPreviews;
         });
-        
+
         toast.success(`เพิ่มรูปภาพสำเร็จ ${validFiles.length} ไฟล์`);
       }
     };
@@ -518,11 +682,11 @@ const RepairEdit = () => {
           preview: e.target.result,
           name: file.name
         };
-        
+
         newPreviews.push(previewData);
 
         processedCount++;
-        
+
         if (processedCount === totalFiles) {
           updateImageState();
         }
@@ -542,17 +706,16 @@ const RepairEdit = () => {
     event.target.value = '';
   };
 
-  // ✅ ฟังก์ชันจัดการรูปภาพเสร็จสิ้น
   const handleCompletionImageChange = (event) => {
     const files = Array.from(event.target.files);
-    
+
     if (files.length === 0) return;
 
     const validFiles = [];
     const newPreviews = [];
     const maxFileSize = 5 * 1024 * 1024;
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    
+
     let processedCount = 0;
     const totalFiles = files.length;
 
@@ -562,12 +725,12 @@ const RepairEdit = () => {
           const updatedImages = [...prev, ...validFiles];
           return updatedImages;
         });
-        
+
         setCompletionImagePreviews(prev => {
           const updatedPreviews = [...prev, ...newPreviews];
           return updatedPreviews;
         });
-        
+
         toast.success(`เพิ่มรูปภาพงานเสร็จสิ้นสำเร็จ ${validFiles.length} ไฟล์`);
       }
     };
@@ -601,11 +764,11 @@ const RepairEdit = () => {
           preview: e.target.result,
           name: file.name
         };
-        
+
         newPreviews.push(previewData);
 
         processedCount++;
-        
+
         if (processedCount === totalFiles) {
           updateImageState();
         }
@@ -630,13 +793,13 @@ const RepairEdit = () => {
       const newImages = prev.filter((_, i) => i !== index);
       return newImages;
     });
-    
+
     setImagePreviews(prev => {
       const newPreviews = prev.filter((_, i) => i !== index);
       return newPreviews;
     });
-    
-    toast.info('ลบรูปภาพแล้ว');
+
+    toast.success('ลบรูปภาพแล้ว');
   };
 
   const removeCurrentImage = (index) => {
@@ -644,18 +807,17 @@ const RepairEdit = () => {
     toast.success('ลบรูปภาพเดิมแล้ว');
   };
 
-  // ✅ ฟังก์ชันลบรูปภาพเสร็จสิ้น
   const removeCompletionImage = (index) => {
     setCompletionImages(prev => {
       const newImages = prev.filter((_, i) => i !== index);
       return newImages;
     });
-    
+
     setCompletionImagePreviews(prev => {
       const newPreviews = prev.filter((_, i) => i !== index);
       return newPreviews;
     });
-    
+
     toast.info('ลบรูปภาพงานเสร็จสิ้นแล้ว');
   };
 
@@ -666,15 +828,25 @@ const RepairEdit = () => {
 
   const getFloorsForBuilding = (buildingId) => {
     if (!buildingId || !buildings[buildingId]) return [];
-    
+
     const floors = [];
-    for (let i = 1; i <= buildings[buildingId].floors; i++) {
-      floors.push(i);
+    const maxFloors = buildings[buildingId].floors;
+
+    if (buildingId === '4') {
+      floors.push({ value: 0, label: 'ใต้ดิน' });
     }
+
+    for (let i = 1; i <= maxFloors; i++) {
+      if (buildingId === '4' && i === 6) {
+        floors.push({ value: i, label: 'ดาดฟ้า' });
+      } else {
+        floors.push({ value: i, label: `ชั้น ${i}` });
+      }
+    }
+
     return floors;
   };
 
-  // ✅ Image Error Handler
   const handleImageError = (e) => {
     console.warn('Image load error:', e.target.src);
     e.target.src = createPlaceholderImage();
@@ -699,118 +871,89 @@ const RepairEdit = () => {
         return;
       }
 
-      if (user?.role === 'user') {
-        const submitData = new FormData();
-        submitData.append('title', formData.title.trim());
-        submitData.append('description', formData.description.trim());
-        submitData.append('category_id', formData.category_id);
-        
-        let location = '';
-        if (locationType === 'indoor') {
-          location = `${buildings[formData.building].name} ชั้น ${formData.floor} ห้อง ${formData.room.trim()}`;
-        } else if (locationType === 'outdoor') {
-          location = `ภายนอกอาคาร: ${formData.outdoor_location.trim()}`;
-        }
-        
-        submitData.append('location', location);
-        submitData.append('priority', formData.priority);
+      const submitData = new FormData();
 
-        selectedImages.forEach((image, index) => {
-          submitData.append(`images`, image);
-        });
+      submitData.append('title', formData.title.trim());
+      submitData.append('description', formData.description.trim());
+      submitData.append('category_id', formData.category_id);
 
-        const keepImageData = currentImages.map(img => {
-          if (img.id === 'legacy' || img.type === 'legacy') {
-            return {
-              type: 'legacy',
-              path: img.file_path
-            };
-          } else {
-            return {
-              type: 'new',
-              id: img.id,
-              path: img.file_path
-            };
-          }
-        });
-        
-        submitData.append('keep_images', JSON.stringify(keepImageData));
+      let location = '';
+      if (locationType === 'indoor') {
+        let roomName;
 
-        const apiClient = axios.create({
-          timeout: 300000,
-        });
-
-        const response = await apiClient.put(`${API_BASE_URL}/api/repairs/${id}`, submitData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            Authorization: `Bearer ${token}`
-          }
-        });
-
-        if (response.data.repair && response.data.repair.id) {
-          navigate(`/repairs/${response.data.repair.id}`);
-        } else if (response.data.id) {
-          navigate(`/repairs/${response.data.id}`);
+        if (rooms.length > 0) {
+          const selectedRoom = rooms.find(room => room.id === parseInt(formData.room));
+          roomName = selectedRoom ? selectedRoom.name : formData.room;
         } else {
-          navigate(`/repairs/${id}`);
+          roomName = formData.room;
         }
-      } else {
-        // ✅ สำหรับ admin/technician ที่อัปเดทสถานะ
-        const statusData = new FormData();
-        
-        // ✅ ตรวจสอบว่ามีการกรอกข้อมูลหรือไม่
-        if (!formData.status || formData.status.trim() === '') {
-          throw new Error('กรุณาระบุสถานะ');
-        }
-        
-        // ✅ ใส่ text fields ก่อน (สำคัญสำหรับ multer)
-        statusData.append('status', formData.status.trim());
-        statusData.append('assigned_to', formData.assigned_to || '');
-        statusData.append('completion_details', formData.completion_details || '');
 
-        // ✅ เก็บรูปภาพเสร็จสิ้นเดิม (ใส่หลัง text fields)
+        const floorLabel = formData.floor === '0' ? 'ใต้ดิน' :
+          formData.building === '4' && formData.floor === '6' ? 'ดาดฟ้า' :
+            `ชั้น ${formData.floor}`;
+
+        location = `${buildings[formData.building].name} ${floorLabel} ${roomName}`;
+      } else if (locationType === 'outdoor') {
+        location = `ภายนอกอาคาร: ${formData.outdoor_location.trim()}`;
+      }
+
+      submitData.append('location', location);
+      submitData.append('priority', formData.priority);
+
+      if (user?.role === 'admin' || user?.role === 'technician') {
+        submitData.append('status', formData.status);
+        submitData.append('assigned_to', formData.assigned_to || '');
+        submitData.append('completion_details', formData.completion_details || '');
+
         const keepCompletionImageData = currentCompletionImages.map(img => ({
           id: img.id,
           path: img.file_path
         }));
-        
-        statusData.append('keep_completion_images', JSON.stringify(keepCompletionImageData));
 
-        // ✅ เพิ่มรูปภาพเสร็จสิ้นใหม่ (ใส่ท้ายสุด)
+        submitData.append('keep_completion_images', JSON.stringify(keepCompletionImageData));
+
         completionImages.forEach((image) => {
-          statusData.append('completion_images', image);
+          submitData.append('completion_images', image);
         });
+      }
 
-        const apiClient = axios.create({
-          timeout: 300000,
-        });
+      selectedImages.forEach((image, index) => {
+        submitData.append(`images`, image);
+      });
 
-        console.log('🔄 Updating repair status with data:', {
-          status: formData.status,
-          assigned_to: formData.assigned_to,
-          completion_details: formData.completion_details ? 'provided' : 'empty',
-          completionImagesCount: completionImages.length,
-          keepCompletionImagesCount: keepCompletionImageData.length
-        });
-
-        // ✅ เพิ่ม debug logging
-        console.log('📤 FormData contents:');
-        for (let [key, value] of statusData.entries()) {
-          if (value instanceof File) {
-            console.log(`${key}: File(${value.name}, ${value.size} bytes)`);
-          } else {
-            console.log(`${key}: ${value}`);
-          }
+      const keepImageData = currentImages.map(img => {
+        if (img.id === 'legacy' || img.type === 'legacy') {
+          return {
+            type: 'legacy',
+            path: img.file_path
+          };
+        } else {
+          return {
+            type: 'new',
+            id: img.id,
+            path: img.file_path
+          };
         }
+      });
 
-        const response = await apiClient.put(`${API_BASE_URL}/api/repairs/${id}/status`, statusData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            Authorization: `Bearer ${token}`
-          },
-        });
+      submitData.append('keep_images', JSON.stringify(keepImageData));
 
-        console.log('✅ Status update response:', response.data);
+      const apiClient = axios.create({
+        timeout: 300000,
+      });
+
+      const response = await apiClient.put(`${API_BASE_URL}/api/repairs/${id}`, submitData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.data.repair && response.data.repair.id) {
+        navigate(`/repairs/${response.data.repair.id}`);
+      } else if (response.data.id) {
+        navigate(`/repairs/${response.data.id}`);
+      } else {
         navigate(`/repairs/${id}`);
       }
 
@@ -820,7 +963,7 @@ const RepairEdit = () => {
 
     } catch (error) {
       console.error('Submit error:', error);
-      
+
       if (error.code === 'ECONNABORTED') {
         toast.error('การอัปโหลดใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง');
       } else if (error.response?.status === 401) {
@@ -850,7 +993,7 @@ const RepairEdit = () => {
   const isAdmin = user?.role === 'admin';
   const isTechnician = user?.role === 'technician';
   const canManageStatus = isAdmin || isTechnician;
-  const canEditDetails = user?.role === 'user';
+  const canEditDetails = user?.role === 'user' || isAdmin;
 
   const getCategoryName = (categoryId) => {
     const category = categories.find(cat => cat.id == categoryId);
@@ -901,7 +1044,7 @@ const RepairEdit = () => {
 
       <main className={`mx-auto py-6 px-4 sm:px-6 lg:px-8 ${isMobile ? 'max-w-full' : 'max-w-4xl'}`} style={{ paddingBottom: isMobile ? '80px' : '0' }}>
         <form onSubmit={handleSubmit} className={`space-y-${isMobile ? '4' : '6'}`}>
-          
+
           {!canEditDetails && (
             <div className={`bg-white shadow-sm border border-gray-100 ${isMobile ? 'rounded-lg' : 'rounded-xl'} ${isMobile ? 'p-4' : 'p-6'}`}>
               <div className={`${isMobile ? 'mb-4' : 'mb-6'}`}>
@@ -912,7 +1055,7 @@ const RepairEdit = () => {
                   {isMobile ? 'ข้อมูลการแจ้งซ่อม' : 'ข้อมูลการแจ้งซ่อมที่ต้องดำเนินการ'}
                 </p>
               </div>
-              
+
               <div className={`grid grid-cols-1 ${isMobile ? 'gap-4' : 'md:grid-cols-2 gap-6'}`}>
                 <div className={`${isMobile ? '' : 'md:col-span-2'}`}>
                   <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
@@ -946,11 +1089,14 @@ const RepairEdit = () => {
                     สถานที่
                   </label>
                   <div className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border border-gray-300 rounded-lg bg-gray-50 ${isMobile ? 'text-base' : 'text-sm'}`}>
-                    {locationType === 'indoor' && formData.building && formData.floor && formData.room
-                      ? `${buildings[formData.building].name} ชั้น ${formData.floor} ห้อง ${formData.room}`
+                    {locationType === 'indoor' && formData.building && formData.floor !== '' && formData.room
+                      ? `${buildings[formData.building].name} ${formData.floor === '0' ? 'ใต้ดิน' :
+                        formData.building === '4' && formData.floor === '6' ? 'ดาดฟ้า' :
+                          `ชั้น ${formData.floor}`
+                      } ${formData.room}`
                       : locationType === 'outdoor' && formData.outdoor_location
-                      ? `ภายนอกอาคาร: ${formData.outdoor_location}`
-                      : 'ไม่ระบุ'
+                        ? `ภายนอกอาคาร: ${formData.outdoor_location}`
+                        : 'ไม่ระบุ'
                     }
                   </div>
                 </div>
@@ -976,14 +1122,14 @@ const RepairEdit = () => {
                 <p className={`text-gray-600 mt-1 ${isMobile ? 'text-sm' : 'text-base'}`}>
                   {isMobile ? 'กรอกข้อมูลให้ครบถ้วน' : 'กรุณากรอกข้อมูลให้ครบถ้วนเพื่อให้เราสามารถดำเนินการได้อย่างรวดเร็ว'}
                 </p>
-                
+
                 {selectedImages.length > 0 && (
                   <div className="mt-2 text-sm text-blue-600">
                     🖼️ เลือกรูปภาพแล้ว: {selectedImages.length} รูป
                   </div>
                 )}
               </div>
-              
+
               <div className={`grid grid-cols-1 ${isMobile ? 'gap-4' : 'md:grid-cols-2 gap-6'}`}>
                 <div className={`${isMobile ? '' : 'md:col-span-2'}`}>
                   <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
@@ -994,9 +1140,8 @@ const RepairEdit = () => {
                     name="title"
                     value={formData.title}
                     onChange={handleInputChange}
-                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.title ? 'border-red-300' : 'border-gray-300'
-                    } ${isMobile ? 'text-base' : 'text-sm'}`}
+                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.title ? 'border-red-300' : 'border-gray-300'
+                      } ${isMobile ? 'text-base' : 'text-sm'}`}
                     placeholder="เช่น ไฟดับในห้องประชุม, คอมพิวเตอร์เปิดไม่ติด"
                     maxLength={200}
                     style={{ fontSize: isMobile ? '16px' : '14px' }}
@@ -1018,9 +1163,8 @@ const RepairEdit = () => {
                     name="category_id"
                     value={formData.category_id}
                     onChange={handleInputChange}
-                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.category_id ? 'border-red-300' : 'border-gray-300'
-                    } ${isMobile ? 'text-base' : 'text-sm'}`}
+                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.category_id ? 'border-red-300' : 'border-gray-300'
+                      } ${isMobile ? 'text-base' : 'text-sm'}`}
                     style={{ fontSize: isMobile ? '16px' : '14px' }}
                     required
                   >
@@ -1044,9 +1188,8 @@ const RepairEdit = () => {
                     name="priority"
                     value={formData.priority}
                     onChange={handleInputChange}
-                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.priority ? 'border-red-300' : 'border-gray-300'
-                    } ${isMobile ? 'text-base' : 'text-sm'}`}
+                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.priority ? 'border-red-300' : 'border-gray-300'
+                      } ${isMobile ? 'text-base' : 'text-sm'}`}
                     style={{ fontSize: isMobile ? '16px' : '14px' }}
                   >
                     <option value="low">ต่ำ - ไม่เร่งด่วน</option>
@@ -1093,7 +1236,7 @@ const RepairEdit = () => {
                         <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700`}>
                           รายละเอียดสถานที่ <span className="text-red-500">*</span>
                         </label>
-                        
+
                         <div className={`grid grid-cols-1 ${isMobile ? 'gap-3' : 'md:grid-cols-3 gap-4'}`}>
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -1103,9 +1246,8 @@ const RepairEdit = () => {
                               name="building"
                               value={formData.building}
                               onChange={handleInputChange}
-                              className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                errors.building ? 'border-red-300' : 'border-gray-300'
-                              } ${isMobile ? 'text-base' : 'text-sm'}`}
+                              className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.building ? 'border-red-300' : 'border-gray-300'
+                                } ${isMobile ? 'text-base' : 'text-sm'}`}
                               style={{ fontSize: isMobile ? '16px' : '14px' }}
                             >
                               <option value="">เลือกอาคาร</option>
@@ -1129,15 +1271,14 @@ const RepairEdit = () => {
                               value={formData.floor}
                               onChange={handleInputChange}
                               disabled={!formData.building}
-                              className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${
-                                errors.floor ? 'border-red-300' : 'border-gray-300'
-                              } ${isMobile ? 'text-base' : 'text-sm'}`}
+                              className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${errors.floor ? 'border-red-300' : 'border-gray-300'
+                                } ${isMobile ? 'text-base' : 'text-sm'}`}
                               style={{ fontSize: isMobile ? '16px' : '14px' }}
                             >
                               <option value="">เลือกชั้น</option>
                               {getFloorsForBuilding(formData.building).map(floor => (
-                                <option key={floor} value={floor}>
-                                  ชั้น {floor}
+                                <option key={floor.value} value={floor.value}>
+                                  {floor.label}
                                 </option>
                               ))}
                             </select>
@@ -1150,27 +1291,60 @@ const RepairEdit = () => {
                             <label className="block text-xs font-medium text-gray-600 mb-1">
                               ห้อง
                             </label>
-                            <input
-                              type="text"
-                              name="room"
-                              value={formData.room}
-                              onChange={handleInputChange}
-                              className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                errors.room ? 'border-red-300' : 'border-gray-300'
-                              } ${isMobile ? 'text-base' : 'text-sm'}`}
-                              placeholder="เช่น 101, ห้องประชุม"
-                              style={{ fontSize: isMobile ? '16px' : '14px' }}
-                            />
+                            {roomsLoading ? (
+                              <div className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg border-gray-300 bg-gray-50 flex items-center justify-center ${isMobile ? 'text-base' : 'text-sm'}`}>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                                กำลังโหลด...
+                              </div>
+                            ) : rooms.length > 0 ? (
+                              <select
+                                name="room"
+                                value={formData.room}
+                                onChange={handleInputChange}
+                                disabled={!formData.building || formData.floor === ''}
+                                className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${errors.room ? 'border-red-300' : 'border-gray-300'
+                                  } ${isMobile ? 'text-base' : 'text-sm'}`}
+                                style={{ fontSize: isMobile ? '16px' : '14px' }}
+                              >
+                                <option value="">เลือกห้อง</option>
+                                {rooms.map((room) => (
+                                  <option key={room.id} value={room.id}>
+                                    {room.name}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                name="room"
+                                value={formData.room}
+                                onChange={handleInputChange}
+                                disabled={!formData.building || formData.floor === ''}
+                                className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${errors.room ? 'border-red-300' : 'border-gray-300'
+                                  } ${isMobile ? 'text-base' : 'text-sm'}`}
+                                placeholder="พิมพ์ชื่อห้อง"
+                                style={{ fontSize: isMobile ? '16px' : '14px' }}
+                              />
+                            )}
                             {errors.room && (
                               <p className="mt-1 text-xs text-red-600">{errors.room}</p>
+                            )}
+                            {formData.building && formData.floor !== '' && rooms.length === 0 && !roomsLoading && (
+                              <p className="mt-1 text-xs text-gray-500">
+                                ไม่พบห้องในฐานข้อมูล กรุณาพิมพ์ชื่อห้อง
+                              </p>
                             )}
                           </div>
                         </div>
 
-                        {formData.building && formData.floor && formData.room && (
+                        {formData.building && formData.floor !== '' && formData.room && (
                           <div className={`mt-2 p-3 bg-blue-50 rounded-lg`}>
                             <p className={`${isMobile ? 'text-sm' : 'text-sm'} text-blue-800`}>
-                              📍 <strong>สถานที่:</strong> {buildings[formData.building].name} ชั้น {formData.floor} ห้อง {formData.room}
+                              📍 <strong>สถานที่:</strong> {buildings[formData.building].name} {
+                                formData.floor === '0' ? 'ใต้ดิน' :
+                                  formData.building === '4' && formData.floor === '6' ? 'ดาดฟ้า' :
+                                    `ชั้น ${formData.floor}`
+                              } {selectedRoomName || formData.room}
                             </p>
                           </div>
                         )}
@@ -1186,11 +1360,10 @@ const RepairEdit = () => {
                             value={formData.outdoor_location}
                             onChange={handleInputChange}
                             rows={isMobile ? 2 : 3}
-                            className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                              errors.outdoor_location ? 'border-red-300' : 'border-gray-300'
-                            } ${isMobile ? 'text-base' : 'text-sm'}`}
-                            placeholder={isMobile ? 
-                              "เช่น ลานจอดรถด้านหน้า, สวนหลังอาคาร 3..." : 
+                            className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.outdoor_location ? 'border-red-300' : 'border-gray-300'
+                              } ${isMobile ? 'text-base' : 'text-sm'}`}
+                            placeholder={isMobile ?
+                              "เช่น ลานจอดรถด้านหน้า, สวนหลังอาคาร 3..." :
                               "อธิบายสถานที่ภายนอกอาคารอย่างละเอียด เช่น ลานจอดรถด้านหน้า, สวนหลังอาคาร 3, บริเวณป้ายรถเมล์..."
                             }
                             maxLength={300}
@@ -1225,11 +1398,10 @@ const RepairEdit = () => {
                     value={formData.description}
                     onChange={handleInputChange}
                     rows={isMobile ? 3 : 4}
-                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.description ? 'border-red-300' : 'border-gray-300'
-                    } ${isMobile ? 'text-base' : 'text-sm'}`}
-                    placeholder={isMobile ? 
-                      "อธิบายปัญหาที่พบอย่างละเอียด..." : 
+                    className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.description ? 'border-red-300' : 'border-gray-300'
+                      } ${isMobile ? 'text-base' : 'text-sm'}`}
+                    placeholder={isMobile ?
+                      "อธิบายปัญหาที่พบอย่างละเอียด..." :
                       "อธิบายปัญหาที่พบอย่างละเอียด เช่น อาการที่เกิดขึ้น, เวลาที่เกิดปัญหา, ได้ลองแก้ไขอย่างไรบ้าง..."
                     }
                     maxLength={1000}
@@ -1253,7 +1425,7 @@ const RepairEdit = () => {
                 <Settings className="w-5 h-5 text-gray-400 mr-2" />
                 <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900`}>จัดการสถานะ</h2>
               </div>
-              
+
               <div className={`grid grid-cols-1 ${isMobile ? 'gap-4' : 'md:grid-cols-2 gap-6'}`}>
                 <div>
                   <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-700 mb-2`}>
@@ -1305,9 +1477,8 @@ const RepairEdit = () => {
                         value={formData.completion_details}
                         onChange={handleInputChange}
                         rows={3}
-                        className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          errors.completion_details ? 'border-red-300' : 'border-gray-300'
-                        } ${isMobile ? 'text-base' : 'text-sm'}`}
+                        className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.completion_details ? 'border-red-300' : 'border-gray-300'
+                          } ${isMobile ? 'text-base' : 'text-sm'}`}
                         placeholder="อธิบายวิธีการซ่อมและผลลัพธ์..."
                         style={{ fontSize: isMobile ? '16px' : '14px' }}
                         required={formData.status === 'completed'}
@@ -1317,7 +1488,6 @@ const RepairEdit = () => {
                       )}
                     </div>
 
-                    {/* ✅ ส่วนอัปโหลดรูปภาพเสร็จสิ้น */}
                     <div className={`${isMobile ? '' : 'md:col-span-2'}`}>
                       <div className="flex items-center mb-4">
                         <CheckCircle className="w-5 h-5 text-green-500 mr-2" />
@@ -1331,7 +1501,6 @@ const RepairEdit = () => {
                         )}
                       </div>
 
-                      {/* รูปภาพเสร็จสิ้นปัจจุบัน */}
                       {currentCompletionImages.length > 0 && (
                         <div className={`${isMobile ? 'mb-4' : 'mb-6'}`}>
                           <h4 className={`${isMobile ? 'text-sm' : 'text-md'} font-medium text-gray-700 mb-3`}>
@@ -1366,7 +1535,6 @@ const RepairEdit = () => {
                         </div>
                       )}
 
-                      {/* รูปภาพเสร็จสิ้นใหม่ */}
                       {completionImagePreviews.length > 0 && (
                         <div className={`${isMobile ? 'mb-4' : 'mb-6'}`}>
                           <h4 className={`${isMobile ? 'text-sm' : 'text-md'} font-medium text-gray-700 mb-3`}>
@@ -1399,7 +1567,6 @@ const RepairEdit = () => {
                         </div>
                       )}
 
-                      {/* ส่วนอัปโหลดรูปภาพเสร็จสิ้น */}
                       <div className={`border-2 border-dashed border-green-300 rounded-lg ${isMobile ? 'p-4' : 'p-6'} hover:border-green-400 transition-colors bg-green-50`}>
                         <div className="text-center">
                           {isMobile ? (
@@ -1407,7 +1574,7 @@ const RepairEdit = () => {
                           ) : (
                             <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
                           )}
-                          
+
                           <input
                             id="completion-images"
                             type="file"
@@ -1417,16 +1584,16 @@ const RepairEdit = () => {
                             onChange={handleCompletionImageChange}
                             className="hidden"
                           />
-                          
+
                           <label htmlFor="completion-images" className="cursor-pointer block">
                             <div className={`inline-flex items-center justify-center px-4 py-3 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-lg hover:shadow-xl rounded-lg transition-all duration-200 active:scale-95 ${isMobile ? 'w-full text-base font-medium' : 'text-sm'}`}>
                               <Upload className={`${isMobile ? 'w-4 h-4' : 'w-4 h-4'} mr-2`} />
                               {isMobile ? 'ถ่ายรูปงานเสร็จ' : currentCompletionImages.length > 0 || completionImagePreviews.length > 0 ? 'เพิ่มรูปงานเสร็จเพิ่มเติม' : 'เพิ่มรูปภาพงานเสร็จสิ้น'}
                             </div>
                           </label>
-                          
+
                           <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600 mt-2`}>
-                            {isMobile ? 
+                            {isMobile ?
                               'อัปโหลดรูปภาพแสดงผลงานที่เสร็จสิ้นแล้ว' :
                               'อัปโหลดรูปภาพแสดงผลงานที่เสร็จสิ้นแล้ว (JPEG, PNG, GIF, WebP ขนาดไม่เกิน 5MB)'
                             }
@@ -1503,7 +1670,26 @@ const RepairEdit = () => {
 
               {imagePreviews.length > 0 && (
                 <div className={`${isMobile ? 'mb-4' : 'mb-6'}`}>
-                  <h3 className={`${isMobile ? 'text-sm' : 'text-md'} font-medium text-gray-700 mb-3`}>รูปภาพใหม่ ({imagePreviews.length} รูป)</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className={`${isMobile ? 'text-sm' : 'text-md'} font-medium text-gray-700`}>
+                      รูปภาพใหม่ ({imagePreviews.length} รูป)
+                    </h3>
+                    <input
+                      id="images-add"
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                      multiple
+                      capture={isMobile ? "environment" : undefined}
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                    <label htmlFor="images-add" className="cursor-pointer">
+                      <span className={`text-blue-600 hover:text-blue-700 ${isMobile ? 'text-sm' : 'text-sm'} inline-flex items-center`}>
+                        <Plus className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} />
+                        เพิ่มรูป
+                      </span>
+                    </label>
+                  </div>
                   <div className={`grid ${isMobile ? 'grid-cols-2 gap-3' : 'grid-cols-2 md:grid-cols-3 gap-4'}`}>
                     {imagePreviews.map((preview, index) => (
                       <div key={preview.id} className="relative group">
@@ -1538,7 +1724,7 @@ const RepairEdit = () => {
                   ) : (
                     <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   )}
-                  
+
                   <input
                     id="images"
                     type="file"
@@ -1548,16 +1734,16 @@ const RepairEdit = () => {
                     onChange={handleImageChange}
                     className="hidden"
                   />
-                  
+
                   <label htmlFor="images" className="cursor-pointer block">
                     <div className={`inline-flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-lg hover:shadow-xl rounded-lg transition-all duration-200 active:scale-95 ${isMobile ? 'w-full text-base font-medium' : 'text-sm'}`}>
                       <Upload className={`${isMobile ? 'w-4 h-4' : 'w-4 h-4'} mr-2`} />
                       {isMobile ? 'ถ่ายรูป/เลือกรูป' : currentImages.length > 0 || imagePreviews.length > 0 ? 'เพิ่มรูปภาพเพิ่มเติม' : 'เพิ่มรูปภาพ'}
                     </div>
                   </label>
-                  
+
                   <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 mt-2`}>
-                    {isMobile ? 
+                    {isMobile ?
                       'JPEG, PNG, GIF ขนาดไม่เกิน 5MB' :
                       'รองรับไฟล์ JPEG, PNG, GIF, WebP ขนาดไม่เกิน 5MB ต่อไฟล์'
                     }
@@ -1569,33 +1755,13 @@ const RepairEdit = () => {
                   )}
                 </div>
               </div>
-
-              {(currentImages.length > 0 || imagePreviews.length > 0) && (
-                <div className="mt-4 text-center">
-                  <input
-                    id="images-add"
-                    type="file"
-                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                    multiple
-                    capture={isMobile ? "environment" : undefined}
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                  <label htmlFor="images-add" className="cursor-pointer">
-                    <span className={`text-blue-600 hover:text-blue-700 ${isMobile ? 'text-sm' : 'text-sm'} inline-flex items-center`}>
-                      <Plus className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} />
-                      เพิ่มรูปอีก
-                    </span>
-                  </label>
-                </div>
-              )}
             </div>
           )}
 
           {!canEditDetails && currentImages.length > 0 && (
             <div className={`bg-white shadow-sm border border-gray-100 ${isMobile ? 'rounded-lg' : 'rounded-xl'} ${isMobile ? 'p-4' : 'p-6'}`}>
               <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900 ${isMobile ? 'mb-4' : 'mb-6'}`}>รูปภาพประกอบ</h2>
-              
+
               <div className={`grid ${isMobile ? 'grid-cols-2 gap-3' : 'grid-cols-2 md:grid-cols-3 gap-4'}`}>
                 {currentImages.map((image, index) => (
                   <div key={`current-${index}`} className="relative group">

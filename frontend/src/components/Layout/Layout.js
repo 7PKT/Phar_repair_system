@@ -15,7 +15,8 @@ import {
   Home,
   Settings,
   Bell,
-  Search
+  Search,
+  MapPin
 } from 'lucide-react';
 
 const Layout = ({ children, title, headerContent }) => {
@@ -25,7 +26,7 @@ const Layout = ({ children, title, headerContent }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  // Detect mobile device and screen size
+
   useEffect(() => {
     const checkDevice = () => {
       const width = window.innerWidth;
@@ -35,7 +36,7 @@ const Layout = ({ children, title, headerContent }) => {
 
       setIsMobile(isMobileDevice || isSmallScreen);
 
-      // Close mobile menu when switching to desktop
+
       if (width >= 768) {
         setIsMobileMenuOpen(false);
       }
@@ -53,12 +54,12 @@ const Layout = ({ children, title, headerContent }) => {
     };
   }, []);
 
-  // Close mobile menu when route changes
+
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
-  // Navigation functions
+
   const handleNavigation = (path) => {
     navigate(path);
     setIsMobileMenuOpen(false);
@@ -75,7 +76,7 @@ const Layout = ({ children, title, headerContent }) => {
     setIsMobileMenuOpen(false);
   };
 
-  // Touch-friendly button component
+
   const TouchButton = ({ onClick, children, className = "", disabled = false, variant = "primary" }) => {
     const baseClasses = "relative overflow-hidden transition-all duration-200 active:scale-95 select-none";
     const variantClasses = {
@@ -144,6 +145,19 @@ const Layout = ({ children, title, headerContent }) => {
       }
     },
     {
+      name: 'จัดการสถานที่',
+      href: '/admin/locations',
+      icon: MapPin,
+      roles: ['admin'],
+      action: () => {
+        if (user?.role === 'admin') {
+          handleNavigation('/admin/locations');
+        } else {
+          toast.error('ไม่มีสิทธิ์เข้าถึงหน้านี้');
+        }
+      }
+    },
+    {
       name: 'ตั้งค่าระบบ',
       href: '/admin/settings',
       icon: Settings,
@@ -177,6 +191,8 @@ const Layout = ({ children, title, headerContent }) => {
         return location.pathname === '/profile';
       case '/admin/users':
         return location.pathname.startsWith('/admin/users');
+      case '/admin/locations':
+        return location.pathname.startsWith('/admin/locations');
       case '/admin/settings':
         return location.pathname.startsWith('/admin/settings');
       default:
@@ -196,7 +212,7 @@ const Layout = ({ children, title, headerContent }) => {
 
   const NavContent = ({ mobile = false }) => (
     <>
-      {/* Logo Section */}
+      { }
       <div className={mobile ? "p-4 border-b border-gray-200" : "p-6 border-b border-gray-200"}>
         <TouchButton
           onClick={() => handleNavigation('/dashboard')}
@@ -210,7 +226,7 @@ const Layout = ({ children, title, headerContent }) => {
         </TouchButton>
       </div>
 
-      {/* User Info */}
+      { }
       <div className={mobile ? "p-3 border-b border-gray-200" : "p-4 border-b border-gray-200"}>
         <TouchButton
           onClick={() => handleNavigation('/profile')}
@@ -232,7 +248,7 @@ const Layout = ({ children, title, headerContent }) => {
         </TouchButton>
       </div>
 
-      {/* Navigation Menu */}
+      { }
       <nav className={`flex-1 ${mobile ? 'p-3' : 'p-4'} overflow-y-auto`}>
         <div className="space-y-1">
           {navigationItems
@@ -270,7 +286,7 @@ const Layout = ({ children, title, headerContent }) => {
         </div>
       </nav>
 
-      {/* System Status Indicator */}
+      { }
       <div className={mobile ? "p-3 border-t border-gray-200" : "p-4 border-t border-gray-200"}>
         <div className="flex items-center space-x-2 text-xs text-gray-500">
           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -278,7 +294,7 @@ const Layout = ({ children, title, headerContent }) => {
         </div>
       </div>
 
-      {/* Logout Button */}
+      { }
       <div className={mobile ? "p-3 border-t border-gray-200" : "p-4 border-t border-gray-200"}>
         <button
           onClick={() => {
@@ -297,14 +313,14 @@ const Layout = ({ children, title, headerContent }) => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Desktop Sidebar */}
+      { }
       {!isMobile && (
         <div className="w-64 bg-white shadow-lg border-r border-gray-200 flex flex-col h-screen fixed left-0 top-0 z-50">
           <NavContent />
         </div>
       )}
 
-      {/* Mobile Header */}
+      { }
       {isMobile && (
         <header className="bg-white shadow-sm border-b border-gray-200 fixed top-0 left-0 right-0 z-50">
           <div className="flex items-center justify-between px-4 py-3">
@@ -338,16 +354,16 @@ const Layout = ({ children, title, headerContent }) => {
         </header>
       )}
 
-      {/* Mobile Sidebar Overlay */}
+      { }
       {isMobile && isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          {/* Backdrop */}
+          { }
           <div
             className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
             onClick={() => setIsMobileMenuOpen(false)}
           ></div>
 
-          {/* Sidebar */}
+          { }
           <div className="fixed top-0 left-0 bottom-0 w-72 max-w-sm bg-white shadow-xl transform transition-transform flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">เมนู</h2>
@@ -366,7 +382,7 @@ const Layout = ({ children, title, headerContent }) => {
         </div>
       )}
 
-      {/* Main Content */}
+      { }
       <div
         className="flex-1"
         style={{
@@ -374,7 +390,7 @@ const Layout = ({ children, title, headerContent }) => {
           paddingTop: isMobile ? '4rem' : '0'
         }}
       >
-        {/* Header */}
+        { }
         {title && (
           <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
             <div
@@ -401,7 +417,7 @@ const Layout = ({ children, title, headerContent }) => {
           </header>
         )}
 
-        {/* Main Content */}
+        { }
         <main
           style={{
             padding: isMobile ? '1rem' : '1.5rem',
@@ -413,13 +429,13 @@ const Layout = ({ children, title, headerContent }) => {
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation */}
+      { }
       {isMobile && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area-inset">
           <div className="flex items-center justify-around py-1">
             {navigationItems
               .filter(item => canAccess(item.roles))
-              .slice(0, 4) // Show only first 4 items in bottom nav
+              .slice(0, 4)
               .map((item) => {
                 const Icon = item.icon;
                 const current = isCurrentPath(item.href) ||
@@ -452,7 +468,7 @@ const Layout = ({ children, title, headerContent }) => {
         </div>
       )}
 
-      {/* Mobile Floating Action Button */}
+      { }
       {isMobile && !location.pathname.startsWith('/repairs/new') && (
         <div className="fixed bottom-20 right-4 z-30">
           <TouchButton
@@ -465,20 +481,20 @@ const Layout = ({ children, title, headerContent }) => {
         </div>
       )}
 
-      {/* iOS Safe Area Support */}
+      { }
       <style dangerouslySetInnerHTML={{
         __html: `
           .safe-area-inset {
             padding-bottom: env(safe-area-inset-bottom);
           }
           
-          /* Improve touch targets */
+          
           @media (max-width: 768px) {
             button {
               min-height: 44px;
             }
             
-            /* Disable text selection on buttons */
+            
             button {
               -webkit-user-select: none;
               -moz-user-select: none;
@@ -486,12 +502,12 @@ const Layout = ({ children, title, headerContent }) => {
               user-select: none;
             }
             
-            /* Smooth scrolling */
+            
             html {
               scroll-behavior: smooth;
             }
             
-            /* Better touch feedback */
+            
             button:active {
               transform: scale(0.95);
             }

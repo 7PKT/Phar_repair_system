@@ -1,4 +1,4 @@
-// App.js (Updated with system-settings route)
+// App.js (Updated with LocationManagement route)
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
@@ -12,6 +12,7 @@ import RepairDetail from './pages/RepairDetail';
 import RepairEdit from './pages/RepairEdit';
 import UserManagement from './pages/UserManagement';
 import SystemSettings from './pages/SystemSettings';
+import LocationManagement from './pages/LocationManagement';
 import './index.css';
 
 // Protected Route Component
@@ -162,6 +163,12 @@ function App() {
             <Route path="/admin/users" element={
               <AdminRoute>
                 <UserManagement />
+              </AdminRoute>
+            } />
+
+            <Route path="/admin/locations" element={
+              <AdminRoute>
+                <LocationManagement />
               </AdminRoute>
             } />
 
