@@ -1,4 +1,4 @@
-// server.js (Updated with LINE Integration)
+// server.js (Fixed - No circular dependency)
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -16,47 +16,91 @@ app.use(express.urlencoded({ extended: true }));
 // Static files for uploaded images
 app.use('/uploads', express.static('uploads'));
 
-// Import routes หลังจากสร้าง app แล้ว
-const authRoutes = require('./routes/auth');
-const repairRoutes = require('./routes/repairs');
-const adminRoutes = require('./routes/admin');
-const roomRoutes = require('./routes/rooms');
+// ✅ เพิ่มการ serve React build files
+if (process.env.NODE_ENV === 'production') {
+    // Production: serve built React files
+    app.use(express.static(path.join(__dirname, '../frontend/build')));
+} else {
+    // Development: serve React files (ถ้ามี build folder)
+    const frontendBuildPath = path.join(__dirname, '../frontend/build');
+    const fs = require('fs');
 
-// ✅ Import system-settings route
-let systemSettingsRoutes = null;
-try {
-    systemSettingsRoutes = require('./routes/repairs/systemSettings');
-    console.log('✅ System settings route loaded');
-} catch (error) {
-    console.warn('⚠️ System settings route not found:', error.message);
-    console.log('💡 Creating routes/repairs/system-settings.js file is required');
+    if (fs.existsSync(frontendBuildPath)) {
+        console.log('📦 Serving React build from:', frontendBuildPath);
+        app.use(express.static(frontendBuildPath));
+    } else {
+        console.log('⚠️ React build not found. Run "npm run build" in frontend folder');
+        console.log('💡 Or use development mode with separate servers');
+    }
 }
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/repairs', repairRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/rooms', roomRoutes);
-
-// ✅ เพิ่ม system-settings route
-if (systemSettingsRoutes) {
-    app.use('/api/repairs/system-settings', systemSettingsRoutes);
-    console.log('✅ System settings route mounted at /api/repairs/system-settings');
-}
-
-// Health check
+// Health check (เพิ่มก่อน routes อื่นๆ)
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'OK',
         message: 'Repair System API is running',
         timestamp: new Date().toISOString(),
+        mode: process.env.NODE_ENV || 'development',
         features: {
             lineNotifications: true,
-            systemSettings: !!systemSettingsRoutes,
-            imageUpload: true
+            systemSettings: true,
+            imageUpload: true,
+            frontend: process.env.NODE_ENV === 'production' ? 'integrated' : 'separate'
         }
     });
 });
+
+// Import routes หลังจากสร้าง app แล้ว
+let authRoutes = null;
+let repairRoutes = null;
+let adminRoutes = null;
+let systemSettingsRoutes = null;
+
+try {
+    authRoutes = require('./routes/auth');
+    console.log('✅ Auth routes loaded');
+} catch (error) {
+    console.warn('⚠️ Auth routes not found:', error.message);
+}
+
+try {
+    repairRoutes = require('./routes/repairs');
+    console.log('✅ Repair routes loaded');
+} catch (error) {
+    console.warn('⚠️ Repair routes not found:', error.message);
+}
+
+try {
+    adminRoutes = require('./routes/admin');
+    console.log('✅ Admin routes loaded');
+} catch (error) {
+    console.warn('⚠️ Admin routes not found:', error.message);
+}
+
+try {
+    systemSettingsRoutes = require('./routes/repairs/systemSettings');
+    console.log('✅ System settings route loaded');
+} catch (error) {
+    console.warn('⚠️ System settings route not found:', error.message);
+}
+
+// API Routes (เพิ่ม /api prefix เพื่อแยกจาก React routes)
+if (authRoutes) {
+    app.use('/api/auth', authRoutes);
+}
+
+if (repairRoutes) {
+    app.use('/api/repairs', repairRoutes);
+}
+
+if (adminRoutes) {
+    app.use('/api/admin', adminRoutes);
+}
+
+if (systemSettingsRoutes) {
+    app.use('/api/repairs/system-settings', systemSettingsRoutes);
+    console.log('✅ System settings route mounted at /api/repairs/system-settings');
+}
 
 // ✅ เพิ่ม endpoint สำหรับทดสอบการเชื่อมต่อ LINE
 app.get('/api/line/test', async (req, res) => {
@@ -70,10 +114,10 @@ app.get('/api/line/test', async (req, res) => {
                 error: 'LINE Messaging service ไม่พบ - ตรวจสอบไฟล์ services/lineMessaging.js'
             });
         }
-        
+
         // Refresh config ก่อนทดสอบ
         await lineMessaging.refreshConfig();
-        
+
         if (!lineMessaging.isConfigured()) {
             return res.status(400).json({
                 success: false,
@@ -96,7 +140,7 @@ app.get('/api/line/test', async (req, res) => {
         }
 
         const result = await lineMessaging.testConnection();
-        
+
         if (result.success) {
             res.json({
                 success: true,
@@ -123,7 +167,7 @@ app.get('/api/line/debug', async (req, res) => {
     try {
         let lineMessaging = null;
         let lineServiceStatus = 'not_found';
-        
+
         try {
             lineMessaging = require('./services/lineMessaging');
             lineServiceStatus = 'loaded';
@@ -142,10 +186,10 @@ app.get('/api/line/debug', async (req, res) => {
         let databaseSettings = [];
         try {
             const db = require('./config/database');
-            
+
             // Refresh config
             await lineMessaging.refreshConfig();
-            
+
             // ดึงการตั้งค่าจากฐานข้อมูล
             const [settings] = await db.execute(`
                 SELECT setting_key, 
@@ -188,28 +232,28 @@ app.get('/api/line/debug', async (req, res) => {
 app.post('/api/webhook', (req, res) => {
     try {
         const events = req.body.events || [];
-        
+
         console.log('📨 Webhook received:', {
             eventsCount: events.length,
             body: req.body
         });
-        
+
         events.forEach((event, index) => {
             console.log(`📋 Event ${index + 1}:`, {
                 type: event.type,
                 source: event.source
             });
-            
+
             if (event.source.type === 'group') {
                 console.log(`🆔 GROUP ID FOUND: ${event.source.groupId}`);
                 console.log('   👆 ใช้ Group ID นี้ในการตั้งค่าระบบ');
             }
-            
+
             if (event.source.type === 'user') {
                 console.log(`👤 User ID: ${event.source.userId}`);
             }
         });
-        
+
         res.status(200).send('OK');
     } catch (error) {
         console.error('Webhook error:', error);
@@ -250,25 +294,53 @@ app.use((error, req, res, next) => {
     });
 });
 
-// 404 handler
-app.use((req, res) => {
-    console.log(`❌ 404 - Route not found: ${req.method} ${req.url}`);
+// 404 handler for API routes only
+app.use('/api/*', (req, res) => {
+    console.log(`❌ 404 - API Route not found: ${req.method} ${req.url}`);
     res.status(404).json({
         message: 'ไม่พบ API endpoint ที่ต้องการ'
     });
 });
 
-// Initialize LINE Messaging on startup
+// ✅ React Router fallback - จัดการ client-side routing
+// ต้องอยู่หลัง API routes เพื่อไม่ให้แย่งกับ API endpoints
+if (process.env.NODE_ENV === 'production') {
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+    });
+} else {
+    // Development mode fallback
+    const frontendBuildPath = path.join(__dirname, '../frontend/build');
+    const fs = require('fs');
+
+    if (fs.existsSync(frontendBuildPath)) {
+        app.get('*', (req, res) => {
+            res.sendFile(path.join(frontendBuildPath, 'index.html'));
+        });
+    }
+}
+
+// Initialize services
 async function initializeServices() {
     try {
         console.log('🔧 Initializing services...');
-        
+
+        // Initialize Database first
+        let db = null;
+        try {
+            db = require('./config/database');
+            console.log('✅ Database module loaded');
+        } catch (error) {
+            console.error('❌ Database module not found:', error.message);
+            return;
+        }
+
         // Initialize LINE Messaging
         let lineMessaging = null;
         try {
             lineMessaging = require('./services/lineMessaging');
             await lineMessaging.refreshConfig();
-            
+
             if (lineMessaging.isConfigured()) {
                 console.log('✅ LINE Messaging Service initialized successfully');
                 console.log(`   - Has Token: ${!!lineMessaging.channelAccessToken}`);
@@ -284,10 +356,9 @@ async function initializeServices() {
             console.error('❌ LINE Messaging Service not found:', error.message);
             console.log('💡 Make sure you have services/lineMessaging.js file');
         }
-        
+
         // Create system_settings table if not exists
         try {
-            const db = require('./config/database');
             await db.execute(`
                 CREATE TABLE IF NOT EXISTS system_settings (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -301,12 +372,12 @@ async function initializeServices() {
                     INDEX idx_setting_key (setting_key)
                 )
             `);
-            
+
             console.log('✅ System settings table ready');
         } catch (dbError) {
             console.error('❌ Database initialization error:', dbError.message);
         }
-        
+
     } catch (error) {
         console.error('❌ Error initializing services:', error);
     }
@@ -314,8 +385,9 @@ async function initializeServices() {
 
 // Start server
 app.listen(PORT, async () => {
-    console.log('=' .repeat(60));
+    console.log('='.repeat(60));
     console.log(`🚀 Server is running on port ${PORT}`);
+    console.log(`🌐 Application URL: http://localhost:${PORT}`);
     console.log(`📱 API URL: http://localhost:${PORT}/api`);
     console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
     if (systemSettingsRoutes) {
@@ -324,22 +396,37 @@ app.listen(PORT, async () => {
     console.log(`🔗 LINE Test: http://localhost:${PORT}/api/line/test`);
     console.log(`🐛 LINE Debug: http://localhost:${PORT}/api/line/debug`);
     console.log(`🪝 Webhook: http://localhost:${PORT}/api/webhook`);
-    console.log('=' .repeat(60));
-    
+
+    // Check if React build exists
+    const frontendBuildPath = path.join(__dirname, '../frontend/build');
+    const fs = require('fs');
+
+    console.log(`🔍 Checking React build at: ${frontendBuildPath}`);
+
+    if (fs.existsSync(frontendBuildPath)) {
+        const indexPath = path.join(frontendBuildPath, 'index.html');
+        if (fs.existsSync(indexPath)) {
+            console.log(`📦 Frontend: http://localhost:${PORT} (integrated)`);
+            console.log(`✅ React build ready with index.html`);
+        } else {
+            console.log(`⚠️ Frontend: Build folder exists but index.html missing`);
+        }
+    } else {
+        console.log(`⚠️ Frontend: Build not found at ${frontendBuildPath}`);
+        console.log(`💡 Run "cd frontend && npm run build" to create build`);
+    }
+
+    console.log('='.repeat(60));
+
     // Initialize services after server starts
     await initializeServices();
-    
-    console.log('=' .repeat(60));
-    console.log('🎯 NEXT STEPS:');
-    console.log('1. สร้างไฟล์ routes/repairs/system-settings.js');
-    console.log('2. แก้ไข services/repairService.js ให้เรียกใช้ LINE notifications');
-    console.log('3. เข้า System Settings ในแอป React');
-    console.log('4. ตั้งค่า LINE Channel Access Token');
-    console.log('5. ตั้งค่า LINE Channel Secret');
-    console.log('6. ตั้งค่า LINE Group ID');
-    console.log('7. ทดสอบการเชื่อมต่อ');
-    console.log('8. สร้างงานซ่อมทดสอบ');
-    console.log('=' .repeat(60));
+
+    console.log('='.repeat(60));
+    console.log('🎯 SYSTEM READY!');
+    console.log('1. เข้าใช้งาน: http://localhost:5000');
+    console.log('2. ทดสอบ API: http://localhost:5000/api/health');
+    console.log('3. ทดสอบ LINE: http://localhost:5000/api/line/test');
+    console.log('='.repeat(60));
 });
 
 module.exports = app;
