@@ -1,4 +1,4 @@
-// utils/lineMessaging.js (Fixed with HTTPS Support + Time Display)
+
 const axios = require('axios');
 const db = require('../config/database');
 
@@ -13,7 +13,7 @@ class LineMessaging {
 
     async initializeConfig() {
         try {
-            // ดึงการตั้งค่า LINE จากฐานข้อมูล
+
             const [settings] = await db.execute(`
                 SELECT setting_key, setting_value 
                 FROM system_settings 
@@ -33,7 +33,7 @@ class LineMessaging {
             });
 
             this.initialized = this.channelAccessToken && this.channelSecret;
-            
+
             if (this.initialized) {
                 console.log('✅ LINE Messaging initialized successfully');
             } else {
@@ -53,7 +53,7 @@ class LineMessaging {
         return this.notificationsEnabled && this.isConfigured() && this.groupId;
     }
 
-    // ✅ ฟังก์ชันสำหรับจัดรูปแบบเวลา (ภาษาไทย)
+
     formatThaiDateTime(date = new Date()) {
         const options = {
             timeZone: 'Asia/Bangkok',
@@ -64,20 +64,20 @@ class LineMessaging {
             minute: '2-digit',
             hour12: false
         };
-        
+
         const formatter = new Intl.DateTimeFormat('th-TH', options);
         const parts = formatter.formatToParts(date);
-        
+
         const day = parts.find(part => part.type === 'day').value;
         const month = parts.find(part => part.type === 'month').value;
         const year = parts.find(part => part.type === 'year').value;
         const hour = parts.find(part => part.type === 'hour').value;
         const minute = parts.find(part => part.type === 'minute').value;
-        
+
         return `${day}/${month}/${year} ${hour}:${minute} น.`;
     }
 
-    // ✅ ฟังก์ชันสำหรับจัดรูปแบบเวลาแบบสั้น
+
     formatThaiTime(date = new Date()) {
         const options = {
             timeZone: 'Asia/Bangkok',
@@ -85,7 +85,7 @@ class LineMessaging {
             minute: '2-digit',
             hour12: false
         };
-        
+
         const formatter = new Intl.DateTimeFormat('th-TH', options);
         return formatter.format(date) + ' น.';
     }
@@ -114,7 +114,7 @@ class LineMessaging {
             );
 
             console.log(`✅ LINE message sent to group ${this.groupId}`);
-            
+
             return {
                 success: true,
                 response: response.data,
@@ -131,7 +131,7 @@ class LineMessaging {
     }
 
     async sendMessage(userIds, message) {
-        // Deprecated: ใช้สำหรับ backward compatibility เท่านั้น
+
         console.log('⚠️ sendMessage to individual users is deprecated, use sendMessageToGroup instead');
         return await this.sendMessageToGroup(message);
     }
@@ -168,29 +168,29 @@ class LineMessaging {
         };
     }
 
-    // ✅ ฟังก์ชันตรวจสอบและสร้าง HTTPS URL
+
     getImageUrl(imagePath) {
         if (!imagePath) return null;
-        
-        // ตรวจสอบ environment variables สำหรับ HTTPS URL
+
+
         const baseUrl = process.env.NGROK_URL || process.env.BASE_URL || process.env.PUBLIC_URL;
-        
-        // ถ้าไม่มี HTTPS URL ให้ return null (ไม่ส่งรูปภาพ)
+
+
         if (!baseUrl || !baseUrl.startsWith('https://')) {
             console.log('⚠️ No HTTPS URL found in environment variables. Images will not be sent.');
             console.log('💡 Set NGROK_URL or BASE_URL to HTTPS URL to enable image notifications');
             return null;
         }
-        
-        // ลบ slash ซ้ำออก
+
+
         const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
         const fullUrl = `${baseUrl}${cleanPath}`;
-        
+
         console.log('🖼️ Generated HTTPS image URL:', fullUrl);
         return fullUrl;
     }
 
-    // ✅ ฟังก์ชันตรวจสอบว่า URL เป็น HTTPS หรือไม่
+
     isValidHttpsUrl(url) {
         if (!url) return false;
         try {
@@ -201,7 +201,7 @@ class LineMessaging {
         }
     }
 
-    // ✅ ฟังก์ชันสำหรับดึงรูปภาพจากฐานข้อมูล
+
     async getRepairImages(repairId) {
         try {
             const [images] = await db.execute(`
@@ -225,7 +225,7 @@ class LineMessaging {
         }
     }
 
-    // ✅ ฟังก์ชันสำหรับดึงรูปภาพเสร็จสิ้น
+
     async getCompletionImages(repairId) {
         try {
             const [images] = await db.execute(`
@@ -249,7 +249,7 @@ class LineMessaging {
         }
     }
 
-    // ✅ ฟังก์ชันสำหรับสร้าง Image Message
+
     createImageMessage(imageUrl, previewUrl = null) {
         if (!this.isValidHttpsUrl(imageUrl)) {
             console.log('⚠️ Invalid HTTPS URL for image:', imageUrl);
@@ -263,13 +263,13 @@ class LineMessaging {
         };
     }
 
-    // ✅ ฟังก์ชันสำหรับสร้าง Image Carousel
+
     createImageCarousel(images, title = 'รูปภาพประกอบ') {
         if (!images || images.length === 0) return null;
 
-        // กรองเฉพาะรูปภาพที่มี HTTPS URL
+
         const validImages = images.filter(image => this.isValidHttpsUrl(image.url));
-        
+
         if (validImages.length === 0) {
             console.log('⚠️ No valid HTTPS images found for carousel');
             return null;
@@ -297,7 +297,7 @@ class LineMessaging {
     async notifyNewRepairRequest(repairData) {
         const priorityColors = {
             low: '#28a745',
-            medium: '#ffc107', 
+            medium: '#ffc107',
             high: '#fd7e14',
             urgent: '#dc3545'
         };
@@ -305,13 +305,13 @@ class LineMessaging {
         const priorityTexts = {
             low: 'ต่ำ',
             medium: 'ปานกลาง',
-            high: 'สูง', 
+            high: 'สูง',
             urgent: 'เร่งด่วน'
         };
 
         const color = priorityColors[repairData.priority] || '#0066CC';
         const currentTime = this.formatThaiDateTime();
-        
+
         const content = [
             {
                 type: 'text',
@@ -420,7 +420,7 @@ class LineMessaging {
             }
         ];
 
-        // ✅ เพิ่มข้อมูลผู้ได้รับมอบหมาย (ถ้ามี)
+
         if (repairData.assigned_to_name) {
             content[2].contents.push({
                 type: 'box',
@@ -446,7 +446,7 @@ class LineMessaging {
             });
         }
 
-        // ✅ เพิ่มข้อความแสดงจำนวนรูปภาพ
+
         if (repairData.imageCount > 0) {
             content.push({
                 type: 'text',
@@ -461,21 +461,21 @@ class LineMessaging {
         const flexMessage = this.createFlexMessage('🔔 แจ้งซ่อมใหม่', content, color);
         const messages = [flexMessage];
 
-        // ✅ ดึงและแสดงรูปภาพ (เฉพาะเมื่อมี HTTPS URL)
+
         if (repairData.id) {
             try {
                 const images = await this.getRepairImages(repairData.id);
                 console.log(`🖼️ Found ${images.length} valid HTTPS images for repair ${repairData.id}`);
 
                 if (images.length > 0) {
-                    // สร้าง Image Carousel
+
                     const imageCarousel = this.createImageCarousel(images, 'รูปภาพการแจ้งซ่อม');
                     if (imageCarousel) {
                         messages.push(imageCarousel);
                         console.log('✅ Added image carousel to notification');
                     }
 
-                    // หรือส่งรูปภาพแยกรายการ (สำหรับรูปภาพ 1-3 รูป)
+
                     if (images.length <= 3) {
                         images.forEach((image, index) => {
                             const imageMessage = this.createImageMessage(image.url);
@@ -487,7 +487,7 @@ class LineMessaging {
                     }
                 } else {
                     console.log('⚠️ No valid HTTPS images found - sending text notification only');
-                    // เพิ่มข้อความแจ้งว่าไม่สามารถแสดงรูปภาพได้
+
                     const noImageMessage = {
                         type: 'text',
                         text: '📷 มีรูปภาพประกอบแต่ไม่สามารถแสดงได้ (ต้องการ HTTPS URL)\n💡 ตั้งค่า ngrok หรือ domain HTTPS เพื่อดูรูปภาพ'
@@ -501,28 +501,28 @@ class LineMessaging {
             }
         }
 
-        // ✅ ดึงและแสดงรูปภาพเสร็จสิ้น (ถ้ามี)
+
         if (repairData.id && repairData.status === 'completed') {
             try {
                 const completionImages = await this.getCompletionImages(repairData.id);
                 console.log(`🖼️ Found ${completionImages.length} valid HTTPS completion images for repair ${repairData.id}`);
 
                 if (completionImages.length > 0) {
-                    // เพิ่มข้อความแจ้ง
+
                     const completionTextMessage = {
                         type: 'text',
                         text: `✅ งานเสร็จสิ้นแล้ว! มีรูปภาพผลงาน ${completionImages.length} รูป 📸`
                     };
                     messages.push(completionTextMessage);
 
-                    // สร้าง Image Carousel สำหรับรูปภาพเสร็จสิ้น
+
                     const imageCarousel = this.createImageCarousel(completionImages, 'รูปภาพงานเสร็จสิ้น');
                     if (imageCarousel) {
                         messages.push(imageCarousel);
                         console.log('✅ Added completion image carousel to notification');
                     }
 
-                    // หรือส่งรูปภาพแยกรายการ (สำหรับรูปภาพ 1-3 รูป)
+
                     if (completionImages.length <= 3) {
                         completionImages.forEach((image, index) => {
                             const imageMessage = this.createImageMessage(image.url);
@@ -560,7 +560,7 @@ class LineMessaging {
 
         const color = statusColors[newStatus] || '#0066CC';
         const currentTime = this.formatThaiDateTime();
-        
+
         const content = [
             {
                 type: 'text',
@@ -671,28 +671,28 @@ class LineMessaging {
         const flexMessage = this.createFlexMessage('📊 เสร็จสิ้น', content, color);
         const messages = [flexMessage];
 
-        // ✅ แสดงรูปภาพเสร็จสิ้นถ้าเปลี่ยนเป็นเสร็จสิ้น
+
         if (newStatus === 'completed' && repairData.id) {
             try {
                 const completionImages = await this.getCompletionImages(repairData.id);
                 console.log(`🖼️ Found ${completionImages.length} valid HTTPS completion images for repair ${repairData.id}`);
 
                 if (completionImages.length > 0) {
-                    // เพิ่มข้อความแจ้ง
+
                     const completionTextMessage = {
                         type: 'text',
                         text: `✅ งานเสร็จสิ้น! มีรูปภาพผลงาน ${completionImages.length} รูป 📸`
                     };
                     messages.push(completionTextMessage);
 
-                    // สร้าง Image Carousel สำหรับรูปภาพเสร็จสิ้น
+
                     const imageCarousel = this.createImageCarousel(completionImages, 'รูปภาพงานเสร็จสิ้น');
                     if (imageCarousel) {
                         messages.push(imageCarousel);
                         console.log('✅ Added completion image carousel to notification');
                     }
 
-                    // หรือส่งรูปภาพแยกรายการ (สำหรับรูปภาพ 1-3 รูป)
+
                     if (completionImages.length <= 3) {
                         completionImages.forEach((image, index) => {
                             const imageMessage = this.createImageMessage(image.url);

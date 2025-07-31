@@ -1,35 +1,31 @@
-// routes/rooms.js (Fixed version)
+// routes/rooms.js
 const express = require('express');
 const router = express.Router();
 const mysql = require('mysql2/promise');
 
-// ✅ แก้ไขการ import auth middleware
 let auth = null;
 let authenticateToken = null;
 let requireRole = null;
 
 try {
-    // ลองใช้ newer auth middleware structure
     const authMiddleware = require('../middleware/auth');
     
     if (authMiddleware.authenticateToken && typeof authMiddleware.authenticateToken === 'function') {
         authenticateToken = authMiddleware.authenticateToken;
-        auth = authenticateToken; // backward compatibility
+        auth = authenticateToken;
         requireRole = authMiddleware.requireRole;
-        console.log('✅ Auth middleware loaded successfully (new structure)');
+        console.log('[AUTH] Auth middleware loaded successfully (new structure)');
     } else if (typeof authMiddleware === 'function') {
-        // legacy single function export
         auth = authMiddleware;
         authenticateToken = authMiddleware;
-        console.log('✅ Auth middleware loaded successfully (legacy structure)');
+        console.log('[AUTH] Auth middleware loaded successfully (legacy structure)');
     } else {
         throw new Error('Auth middleware structure not recognized');
     }
 } catch (error) {
-    console.error('⚠️ Error loading auth middleware:', error.message);
-    console.log('🔧 Using fallback auth middleware (admin access for development)');
+    console.error('[AUTH] Error loading auth middleware:', error.message);
+    console.log('[AUTH] Using fallback auth middleware (admin access for development)');
     
-    // Fallback auth middleware for development
     auth = (req, res, next) => {
         req.user = { 
             id: 1, 
@@ -44,7 +40,6 @@ try {
     requireRole = (roles) => (req, res, next) => next();
 }
 
-// ✅ แก้ไข Database connection
 const createConnection = async () => {
     try {
         return await mysql.createConnection({
@@ -55,12 +50,11 @@ const createConnection = async () => {
             charset: 'utf8mb4'
         });
     } catch (error) {
-        console.error('Database connection error:', error.message);
+        console.error('[ROOMS] Database connection error:', error.message);
         throw error;
     }
 };
 
-// ✅ Get all active rooms
 router.get('/', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
@@ -74,21 +68,21 @@ router.get('/', authenticateToken, async (req, res) => {
 
         await connection.end();
 
+        console.log('[ROOMS] Fetched rooms:', rooms.length);
         res.json({
             success: true,
             data: rooms
         });
     } catch (error) {
-        console.error('Error fetching rooms:', error);
+        console.error('[ROOMS] Error fetching rooms:', error);
         res.status(500).json({
             success: false,
-            message: 'เกิดข้อผิดพลาดในการดึงข้อมูลห้อง',
+            message: 'Error fetching rooms',
             error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 });
 
-// ✅ Get rooms by building and floor (query parameters)
 router.get('/by-building-floor', authenticateToken, async (req, res) => {
     try {
         const { building, floor } = req.query;
@@ -96,7 +90,7 @@ router.get('/by-building-floor', authenticateToken, async (req, res) => {
         if (!building || !floor) {
             return res.status(400).json({
                 success: false,
-                message: 'กรุณาระบุอาคารและชั้น'
+                message: 'Building and floor required'
             });
         }
 
@@ -106,7 +100,7 @@ router.get('/by-building-floor', authenticateToken, async (req, res) => {
         if (isNaN(buildingNum) || isNaN(floorNum)) {
             return res.status(400).json({
                 success: false,
-                message: 'อาคารและชั้นต้องเป็นตัวเลข'
+                message: 'Building and floor must be numbers'
             });
         }
 
@@ -121,6 +115,7 @@ router.get('/by-building-floor', authenticateToken, async (req, res) => {
 
         await connection.end();
 
+        console.log('[ROOMS] Fetched rooms for building', buildingNum, 'floor', floorNum, ':', rooms.length);
         res.json({
             success: true,
             data: rooms,
@@ -129,15 +124,14 @@ router.get('/by-building-floor', authenticateToken, async (req, res) => {
             count: rooms.length
         });
     } catch (error) {
-        console.error('Error fetching rooms by building and floor:', error);
+        console.error('[ROOMS] Error fetching rooms by building and floor:', error);
         res.status(500).json({
             success: false,
-            message: 'เกิดข้อผิดพลาดในการดึงข้อมูลห้อง'
+            message: 'Error fetching rooms'
         });
     }
 });
 
-// ✅ Get all buildings
 router.get('/buildings', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
@@ -151,20 +145,20 @@ router.get('/buildings', authenticateToken, async (req, res) => {
 
         await connection.end();
 
+        console.log('[ROOMS] Fetched buildings:', buildings.length);
         res.json({
             success: true,
             data: buildings
         });
     } catch (error) {
-        console.error('Error fetching buildings:', error);
+        console.error('[ROOMS] Error fetching buildings:', error);
         res.status(500).json({
             success: false,
-            message: 'เกิดข้อผิดพลาดในการดึงข้อมูลอาคาร'
+            message: 'Error fetching buildings'
         });
     }
 });
 
-// ✅ Get floors by building (query parameter version)
 router.get('/floors', authenticateToken, async (req, res) => {
     try {
         const { building } = req.query;
@@ -172,7 +166,7 @@ router.get('/floors', authenticateToken, async (req, res) => {
         if (!building) {
             return res.status(400).json({
                 success: false,
-                message: 'กรุณาระบุหมายเลขอาคาร'
+                message: 'Building number required'
             });
         }
 
@@ -181,7 +175,7 @@ router.get('/floors', authenticateToken, async (req, res) => {
         if (isNaN(buildingNum)) {
             return res.status(400).json({
                 success: false,
-                message: 'อาคารต้องเป็นตัวเลข'
+                message: 'Building must be a number'
             });
         }
 
@@ -196,21 +190,21 @@ router.get('/floors', authenticateToken, async (req, res) => {
 
         await connection.end();
 
+        console.log('[ROOMS] Fetched floors for building', buildingNum, ':', floors.length);
         res.json({
             success: true,
             data: floors,
             building: buildingNum
         });
     } catch (error) {
-        console.error('Error fetching floors:', error);
+        console.error('[ROOMS] Error fetching floors:', error);
         res.status(500).json({
             success: false,
-            message: 'เกิดข้อผิดพลาดในการดึงข้อมูลชั้น'
+            message: 'Error fetching floors'
         });
     }
 });
 
-// ✅ Get floors by building (URL parameter version - แก้ไขปัญหา path-to-regexp)
 router.get('/floors/:building', authenticateToken, async (req, res) => {
     try {
         const building = parseInt(req.params.building);
@@ -218,7 +212,7 @@ router.get('/floors/:building', authenticateToken, async (req, res) => {
         if (isNaN(building)) {
             return res.status(400).json({
                 success: false,
-                message: 'อาคารต้องเป็นตัวเลข'
+                message: 'Building must be a number'
             });
         }
 
@@ -233,28 +227,27 @@ router.get('/floors/:building', authenticateToken, async (req, res) => {
 
         await connection.end();
 
+        console.log('[ROOMS] Fetched floors for building', building, ':', floors.length);
         res.json({
             success: true,
             data: floors.map(row => row.floor),
             building: building
         });
     } catch (error) {
-        console.error('Error fetching floors:', error);
+        console.error('[ROOMS] Error fetching floors:', error);
         res.status(500).json({
             success: false,
-            message: 'เกิดข้อผิดพลาดในการดึงข้อมูลชั้น'
+            message: 'Error fetching floors'
         });
     }
 });
 
-// ✅ Create new room (Admin only)
 router.post('/', authenticateToken, async (req, res) => {
     try {
-        // Check admin role if requireRole is available
         if (requireRole && req.user.role !== 'admin') {
             return res.status(403).json({
                 success: false,
-                message: 'ไม่มีสิทธิ์เข้าถึง'
+                message: 'Access denied'
             });
         }
 
@@ -263,13 +256,12 @@ router.post('/', authenticateToken, async (req, res) => {
         if (!name || !building || floor === undefined) {
             return res.status(400).json({
                 success: false,
-                message: 'กรุณากรอกข้อมูลที่จำเป็น (ชื่อห้อง, อาคาร, ชั้น)'
+                message: 'Name, building, and floor required'
             });
         }
 
         const connection = await createConnection();
 
-        // Check if room already exists
         const [existing] = await connection.execute(`
             SELECT id FROM rooms 
             WHERE name = ? AND building = ? AND floor = ? AND is_active = 1
@@ -279,11 +271,10 @@ router.post('/', authenticateToken, async (req, res) => {
             await connection.end();
             return res.status(409).json({
                 success: false,
-                message: 'ห้องนี้มีอยู่แล้วในอาคารและชั้นที่ระบุ'
+                message: 'Room already exists in this building and floor'
             });
         }
 
-        // Create new room
         const [result] = await connection.execute(`
             INSERT INTO rooms (name, building, floor, description, is_active)
             VALUES (?, ?, ?, ?, 1)
@@ -291,9 +282,10 @@ router.post('/', authenticateToken, async (req, res) => {
 
         await connection.end();
 
+        console.log('[ROOMS] Created room:', result.insertId);
         res.status(201).json({
             success: true,
-            message: 'เพิ่มห้องสำเร็จ',
+            message: 'Room created successfully',
             data: {
                 id: result.insertId,
                 name,
@@ -303,22 +295,20 @@ router.post('/', authenticateToken, async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Error creating room:', error);
+        console.error('[ROOMS] Error creating room:', error);
         res.status(500).json({
             success: false,
-            message: 'เกิดข้อผิดพลาดในการเพิ่มห้อง'
+            message: 'Error creating room'
         });
     }
 });
 
-// ✅ Update room (Admin only)
 router.put('/:id', authenticateToken, async (req, res) => {
     try {
-        // Check admin role
         if (req.user.role !== 'admin') {
             return res.status(403).json({
                 success: false,
-                message: 'ไม่มีสิทธิ์เข้าถึง'
+                message: 'Access denied'
             });
         }
 
@@ -328,13 +318,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
         if (isNaN(roomId)) {
             return res.status(400).json({
                 success: false,
-                message: 'ID ห้องไม่ถูกต้อง'
+                message: 'Invalid room ID'
             });
         }
 
         const connection = await createConnection();
 
-        // Check if room exists
         const [room] = await connection.execute(`
             SELECT id FROM rooms WHERE id = ?
         `, [roomId]);
@@ -343,11 +332,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
             await connection.end();
             return res.status(404).json({
                 success: false,
-                message: 'ไม่พบห้องที่ระบุ'
+                message: 'Room not found'
             });
         }
 
-        // Update room
         const [result] = await connection.execute(`
             UPDATE rooms 
             SET name = ?, building = ?, floor = ?, description = ?, is_active = ?, updated_at = NOW()
@@ -356,27 +344,26 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
         await connection.end();
 
+        console.log('[ROOMS] Updated room:', roomId);
         res.json({
             success: true,
-            message: 'อัปเดตข้อมูลห้องสำเร็จ'
+            message: 'Room updated successfully'
         });
     } catch (error) {
-        console.error('Error updating room:', error);
+        console.error('[ROOMS] Error updating room:', error);
         res.status(500).json({
             success: false,
-            message: 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลห้อง'
+            message: 'Error updating room'
         });
     }
 });
 
-// ✅ Delete room (soft delete - Admin only)
 router.delete('/:id', authenticateToken, async (req, res) => {
     try {
-        // Check admin role
         if (req.user.role !== 'admin') {
             return res.status(403).json({
                 success: false,
-                message: 'ไม่มีสิทธิ์เข้าถึง'
+                message: 'Access denied'
             });
         }
 
@@ -385,13 +372,12 @@ router.delete('/:id', authenticateToken, async (req, res) => {
         if (isNaN(roomId)) {
             return res.status(400).json({
                 success: false,
-                message: 'ID ห้องไม่ถูกต้อง'
+                message: 'Invalid room ID'
             });
         }
 
         const connection = await createConnection();
 
-        // Check if room exists and is active
         const [room] = await connection.execute(`
             SELECT id FROM rooms WHERE id = ? AND is_active = 1
         `, [roomId]);
@@ -400,11 +386,10 @@ router.delete('/:id', authenticateToken, async (req, res) => {
             await connection.end();
             return res.status(404).json({
                 success: false,
-                message: 'ไม่พบห้องที่ระบุ'
+                message: 'Room not found'
             });
         }
 
-        // Soft delete room
         await connection.execute(`
             UPDATE rooms 
             SET is_active = 0, updated_at = NOW()
@@ -413,20 +398,20 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
         await connection.end();
 
+        console.log('[ROOMS] Deleted room:', roomId);
         res.json({
             success: true,
-            message: 'ลบห้องสำเร็จ'
+            message: 'Room deleted successfully'
         });
     } catch (error) {
-        console.error('Error deleting room:', error);
+        console.error('[ROOMS] Error deleting room:', error);
         res.status(500).json({
             success: false,
-            message: 'เกิดข้อผิดพลาดในการลบห้อง'
+            message: 'Error deleting room'
         });
     }
 });
 
-// ✅ Debug endpoint to check rooms structure
 router.get('/debug/info', (req, res) => {
     res.json({
         message: 'Rooms route debug info',

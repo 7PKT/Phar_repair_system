@@ -1,13 +1,13 @@
-// services/repairService.js (แก้ไข import path + assigned_to_name + ส่ง LINE เฉพาะเมื่อเสร็จสิ้น)
+
 const db = require('../config/database');
 const imageService = require('./imageService');
-// ✅ แก้ไข path การ import LINE Messaging
+
 const lineMessaging = require('./lineMessaging');
 
 class RepairService {
     async getRepairRequests(queryParams, user) {
         const { status, category, priority, page, limit } = queryParams;
-        
+
         const shouldPaginate = page || limit;
         const actualPage = parseInt(page) || 1;
         const actualLimit = parseInt(limit) || (shouldPaginate ? 10 : 999999);
@@ -90,7 +90,7 @@ class RepairService {
 
         const repair = repairs[0];
         await this.loadRepairImages(repair);
-        
+
         const [history] = await db.execute(`
             SELECT 
                 sh.*,
@@ -158,7 +158,7 @@ class RepairService {
 
     async createRepair(repairData) {
         const connection = await db.getConnection();
-        
+
         try {
             await connection.beginTransaction();
 
@@ -168,7 +168,7 @@ class RepairService {
                 throw new Error('กรุณากรอกข้อมูลให้ครบถ้วน');
             }
 
-            // ✅ บันทึกข้อมูลลงฐานข้อมูล
+
             const [result] = await connection.execute(`
                 INSERT INTO repair_requests 
                 (title, description, category_id, location, priority, requester_id)
@@ -184,7 +184,7 @@ class RepairService {
             await connection.commit();
             console.log(`✅ Repair created successfully with ID: ${repairId}`);
 
-            // ❌ ลบการส่งการแจ้งเตือน LINE เมื่อสร้างใหม่
+
             console.log('📝 Repair created - No LINE notification sent (only send when completed)');
 
             return {
@@ -206,7 +206,7 @@ class RepairService {
 
     async updateRepair(repairId, updateData, user) {
         const connection = await db.getConnection();
-        
+
         try {
             await connection.beginTransaction();
 
@@ -282,7 +282,7 @@ class RepairService {
 
     async updateRepairStatus(repairId, statusData) {
         const connection = await db.getConnection();
-        
+
         try {
             await connection.beginTransaction();
 
@@ -328,7 +328,7 @@ class RepairService {
                 updateParams
             );
 
-            // จัดการรูปภาพเสร็จสิ้น
+
             if (status === 'completed') {
                 const [existingCompletionImages] = await connection.execute(`
                     SELECT id, file_path FROM completion_images WHERE repair_request_id = ?
@@ -372,12 +372,12 @@ class RepairService {
             await connection.commit();
             console.log(`✅ Repair status updated: ${repairId} (${oldStatus} -> ${status})`);
 
-            // ✅ ส่งการแจ้งเตือน LINE เฉพาะเมื่อเปลี่ยนสถานะเป็น "completed" เท่านั้น
+
             if (status === 'completed') {
                 try {
                     console.log('🔔 Preparing LINE notification for completion...');
-                    
-                    // ✅ แก้ไข SQL query ให้ดึง assigned_to_name ด้วย
+
+
                     const [repairDetail] = await connection.execute(`
                         SELECT 
                             r.*,
@@ -405,20 +405,20 @@ class RepairService {
                             updated_by_name: notificationData.updated_by_name
                         });
 
-                        // ส่งการแจ้งเตือนแบบ async
+
                         setImmediate(async () => {
                             try {
                                 await lineMessaging.refreshConfig(); // รีเฟรชการตั้งค่าก่อน
-                                
+
                                 if (lineMessaging.isEnabled()) {
                                     console.log('📱 Sending LINE completion notification...');
                                     const result = await lineMessaging.notifyStatusUpdate(
-                                        notificationData, 
-                                        oldStatus, 
-                                        status, 
+                                        notificationData,
+                                        oldStatus,
+                                        status,
                                         notificationData.updated_by_name || 'ไม่ระบุ'
                                     );
-                                    
+
                                     if (result.success) {
                                         console.log(`✅ LINE completion notification sent successfully for repair ID: ${repairId}`);
                                     } else {
@@ -451,7 +451,7 @@ class RepairService {
 
     async deleteRepair(repairId) {
         const connection = await db.getConnection();
-        
+
         try {
             await connection.beginTransaction();
 

@@ -1,6 +1,6 @@
 const mysql = require('mysql2/promise');
 
-// Hybrid Database Configuration with Auto-Fallback
+
 class DatabaseManager {
     constructor() {
         this.activeConnection = null;
@@ -58,9 +58,9 @@ class DatabaseManager {
     async initialize() {
         console.log(`🔄 Database Manager - Preferred mode: ${this.preferredMode.toUpperCase()}`);
 
-        // ลองเชื่อมต่อตามที่ต้องการก่อน
+
         if (this.preferredMode === 'remote') {
-            // ลอง Remote ก่อน
+
             console.log('🌐 Testing REMOTE database connection...');
             const remoteConfig = this.getRemoteConfig();
             this.isRemoteConnected = await this.testConnection(remoteConfig, 'REMOTE');
@@ -74,7 +74,7 @@ class DatabaseManager {
             }
         }
 
-        // ลอง Local (หรือ fallback)
+
         console.log('🏠 Testing LOCAL database connection...');
         const localConfig = this.getLocalConfig();
         this.isLocalConnected = await this.testConnection(localConfig, 'LOCAL');
@@ -85,10 +85,10 @@ class DatabaseManager {
             return { mode: 'local', config: localConfig };
         }
 
-        // ถ้าทั้งคู่ไม่ได้
+
         console.error('❌ Both REMOTE and LOCAL database connections failed');
 
-        // สร้าง mock connection เพื่อป้องกัน error
+
         this.activeConnection = this.createMockConnection();
         return { mode: 'mock', config: null };
     }
@@ -132,11 +132,11 @@ class DatabaseManager {
     }
 }
 
-// สร้าง instance เดียว
+
 const dbManager = new DatabaseManager();
 let initPromise = null;
 
-// Function สำหรับ initialize
+
 async function initializeDatabase() {
     if (!initPromise) {
         initPromise = dbManager.initialize();
@@ -144,7 +144,7 @@ async function initializeDatabase() {
     return await initPromise;
 }
 
-// Export functions ที่เข้ากันได้กับโค้ดเดิม
+
 const db = {
     execute: async (sql, params) => {
         await initializeDatabase();
@@ -163,7 +163,7 @@ const db = {
     }
 };
 
-// Initialize เมื่อโหลดไฟล์ (แต่ไม่ทำทันที)
-// ลบการ auto-initialize ออกเพื่อหลีกเลี่ยง circular dependency
+
+
 
 module.exports = db;
