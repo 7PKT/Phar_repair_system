@@ -910,7 +910,13 @@ const RepairEdit = () => {
 
       if (user?.role === 'admin' || user?.role === 'technician') {
         submitData.append('status', formData.status);
-                submitData.append('assigned_to', formData.assigned_to || '');
+
+        if (formData.assigned_to && formData.assigned_to !== '') {
+          submitData.append('assigned_to', parseInt(formData.assigned_to, 10));
+        } else {
+          submitData.append('assigned_to', '');
+        }
+
         submitData.append('completion_details', formData.completion_details || '');
 
         const keepCompletionImageData = currentCompletionImages.map(img => ({
@@ -950,12 +956,7 @@ const RepairEdit = () => {
         timeout: 300000,
       });
 
-      console.log("submitData", {
-        status: formData.status,
-        assigned_to: formData.assigned_to,
-        assigned_to_type: typeof formData.assigned_to,
-        assigned_to_parsed: parseInt(formData.assigned_to, 10)
-      });
+      console.log('Submitting repair update...');
 
       const response = await apiClient.put(`${API_BASE_URL}/api/repairs/${id}`, submitData, {
         headers: {

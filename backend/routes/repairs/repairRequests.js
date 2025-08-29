@@ -59,50 +59,96 @@ router.post('/', authenticateToken, upload.array('images', 50), async (req, res)
         if (req.files) {
             req.files.forEach(file => imageService.deleteFile(file.path));
         }
-        
+
         console.error('ข้อผิดพลาดในการสร้างการซ่อม:', error);
         res.status(500).json({ message: 'เกิดข้อผิดพลาด: ' + error.message });
     }
 });
 
-router.put('/:id', authenticateToken, upload.array('images', 50), async (req, res) => {
+// *** เก็บเฉพาะ route เดียวพร้อม debug ***
+router.put('/:id', authenticateToken, upload.fields([
+    { name: 'images', maxCount: 50 },
+    { name: 'completion_images', maxCount: 50 }
+]), async (req, res) => {
     try {
-        const updateData = {
-            ...req.body,
-            new_images: req.files || []
-        };
+        console.log('=== DEBUG UPDATE REPAIR ===');
+        console.log('User role:', req.user.role);
+        console.log('req.body.status:', req.body.status);
+        console.log('req.body.assigned_to:', req.body.assigned_to);
+        console.log('Type of status:', typeof req.body.status);
+        console.log('Status empty check:', !req.body.status);
+        console.log('Files:', req.files);
 
-        await repairService.updateRepair(req.params.id, updateData, req.user);
+        const userRole = req.user.role;
 
-        res.json({ message: 'อัพเดทข้อมูลสำเร็จ' });
-    } catch (error) {
-        if (req.files) {
-            req.files.forEach(file => imageService.deleteFile(file.path));
+        if (userRole === 'user') {
+            // User แก้ไขแค่ข้อมูลพื้นฐาน
+            const updateData = {
+                ...req.body,
+                new_images: req.files?.images || []
+            };
+
+            await repairService.updateRepair(req.params.id, updateData, req.user);
+
+        } else if (userRole === 'admin' || userRole === 'technician') {
+            // Admin/Technician แก้ไขได้ทั้งข้อมูลพื้นฐานและสถานะ
+
+            // อัปเดตข้อมูลพื้นฐานถ้ามี
+            if (req.body.title || req.body.description || req.body.category_id) {
+                console.log('Updating basic data...');
+                const updateData = {
+                    title: req.body.title,
+                    description: req.body.description,
+                    category_id: req.body.category_id,
+                    location: req.body.location,
+                    priority: req.body.priority,
+                    new_images: req.files?.images || [],
+                    keep_images: req.body.keep_images
+                };
+
+                await repairService.updateRepair(req.params.id, updateData, req.user);
+            }
+
+            // อัปเดตสถานะถ้ามี
+            console.log('Checking status condition:', !!req.body.status);
+            console.log('Status value:', JSON.stringify(req.body.status));
+            
+            if (req.body.status !== undefined && req.body.status !== null && req.body.status !== '') {
+                console.log('Status condition passed! Updating status...');
+                const statusData = {
+                    status: req.body.status,
+                    completion_details: req.body.completion_details,
+                    assigned_to: req.body.assigned_to,
+                    completion_images: req.files?.completion_images || [],
+                    updated_by: req.user.id,
+                    keep_completion_images: req.body.keep_completion_images
+                };
+
+                console.log('Status data being sent:', statusData);
+                await repairService.updateRepairStatus(req.params.id, statusData);
+                console.log('Status update completed!');
+            } else {
+                console.log('Status condition failed! Status value:', req.body.status);
+            }
         }
-        
+
+        res.json({
+            message: 'อัพเดทข้อมูลสำเร็จ',
+            repair: { id: req.params.id }
+        });
+
+    } catch (error) {
+        // ลบไฟล์ที่อัปโหลดมาถ้าเกิดข้อผิดพลาด
+        if (req.files) {
+            if (req.files.images) {
+                req.files.images.forEach(file => imageService.deleteFile(file.path));
+            }
+            if (req.files.completion_images) {
+                req.files.completion_images.forEach(file => imageService.deleteFile(file.path));
+            }
+        }
+
         console.error('ข้อผิดพลาดในการอัพเดทการซ่อม:', error);
-        res.status(500).json({ message: 'เกิดข้อผิดพลาด: ' + error.message });
-    }
-});
-
-router.put('/:id/status', authenticateToken, requireRole(['admin', 'technician']), 
-    upload.array('completion_images', 50), async (req, res) => {
-    try {
-        const statusData = {
-            ...req.body,
-            completion_images: req.files || [],
-            updated_by: req.user.id
-        };
-
-        await repairService.updateRepairStatus(req.params.id, statusData);
-
-        res.json({ message: 'อัพเดทสถานะสำเร็จ' });
-    } catch (error) {
-        if (req.files) {
-            req.files.forEach(file => imageService.deleteFile(file.path));
-        }
-        
-        console.error('ข้อผิดพลาดในการอัพเดทสถานะ:', error);
         res.status(500).json({ message: 'เกิดข้อผิดพลาด: ' + error.message });
     }
 });

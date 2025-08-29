@@ -307,9 +307,13 @@ class RepairService {
             const updateFields = ['status = ?'];
             const updateParams = [status];
 
-            if (assigned_to !== undefined && assigned_to !== null && assigned_to !== '') {
-                updateFields.push('assigned_to = ?');
-                updateParams.push(assigned_to);
+            if (assigned_to !== undefined && assigned_to !== null) {
+                if (assigned_to === '' || assigned_to === 0 || assigned_to === '0') {
+                    updateFields.push('assigned_to = NULL');
+                } else {
+                    updateFields.push('assigned_to = ?');
+                    updateParams.push(parseInt(assigned_to, 10));
+                }
             }
 
             if (completion_details !== undefined && completion_details !== null) {
@@ -323,16 +327,28 @@ class RepairService {
 
             updateParams.push(repairId);
 
+            console.log('🔄 Executing update query:', {
+                updateFields,
+                updateParams: updateParams.slice(0, -1),
+                repairId
+            });
+
+            console.log('Received statusData:', {
+                status: statusData.status,
+                assigned_to: statusData.assigned_to,
+                assigned_to_type: typeof statusData.assigned_to,
+                completion_details: statusData.completion_details
+            });
+
             await connection.execute(
                 `UPDATE repair_requests SET ${updateFields.join(', ')} WHERE id = ?`,
                 updateParams
             );
 
-
             if (status === 'completed') {
                 const [existingCompletionImages] = await connection.execute(`
-                    SELECT id, file_path FROM completion_images WHERE repair_request_id = ?
-                `, [repairId]);
+                SELECT id, file_path FROM completion_images WHERE repair_request_id = ?
+            `, [repairId]);
 
                 let keepCompletionImageData = [];
                 try {
@@ -354,8 +370,8 @@ class RepairService {
                     if (!keepCompletionImageIds.has(existingImage.id)) {
                         imageService.deleteFile(existingImage.file_path);
                         await connection.execute(`
-                            DELETE FROM completion_images WHERE id = ?
-                        `, [existingImage.id]);
+                        DELETE FROM completion_images WHERE id = ?
+                    `, [existingImage.id]);
                     }
                 }
 
@@ -365,33 +381,31 @@ class RepairService {
             }
 
             await connection.execute(`
-                INSERT INTO status_history (repair_request_id, old_status, new_status, notes, updated_by)
-                VALUES (?, ?, ?, ?, ?)
-            `, [repairId, oldStatus, status, completion_details || null, updated_by]);
+            INSERT INTO status_history (repair_request_id, old_status, new_status, notes, updated_by)
+            VALUES (?, ?, ?, ?, ?)
+        `, [repairId, oldStatus, status, completion_details || null, updated_by]);
 
             await connection.commit();
             console.log(`✅ Repair status updated: ${repairId} (${oldStatus} -> ${status})`);
-
 
             if (status === 'completed') {
                 try {
                     console.log('🔔 Preparing LINE notification for completion...');
 
-
                     const [repairDetail] = await connection.execute(`
-                        SELECT 
-                            r.*,
-                            c.name as category_name,
-                            u1.full_name as requester_name,
-                            u2.full_name as assigned_to_name,
-                            u3.full_name as updated_by_name
-                        FROM repair_requests r
-                        LEFT JOIN categories c ON r.category_id = c.id
-                        LEFT JOIN users u1 ON r.requester_id = u1.id
-                        LEFT JOIN users u2 ON r.assigned_to = u2.id
-                        LEFT JOIN users u3 ON u3.id = ?
-                        WHERE r.id = ?
-                    `, [updated_by, repairId]);
+                    SELECT 
+                        r.*,
+                        c.name as category_name,
+                        u1.full_name as requester_name,
+                        u2.full_name as assigned_to_name,
+                        u3.full_name as updated_by_name
+                    FROM repair_requests r
+                    LEFT JOIN categories c ON r.category_id = c.id
+                    LEFT JOIN users u1 ON r.requester_id = u1.id
+                    LEFT JOIN users u2 ON r.assigned_to = u2.id
+                    LEFT JOIN users u3 ON u3.id = ?
+                    WHERE r.id = ?
+                `, [updated_by, repairId]);
 
                     if (repairDetail.length > 0) {
                         const notificationData = repairDetail[0];
@@ -405,10 +419,9 @@ class RepairService {
                             updated_by_name: notificationData.updated_by_name
                         });
 
-
                         setImmediate(async () => {
                             try {
-                                await lineMessaging.refreshConfig(); // รีเฟรชการตั้งค่าก่อน
+                                await lineMessaging.refreshConfig();
 
                                 if (lineMessaging.isEnabled()) {
                                     console.log('📱 Sending LINE completion notification...');
