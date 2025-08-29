@@ -151,9 +151,9 @@ const RepairDetail = () => {
     await fetchRepairDetail();
   };
 
-  // ✅ ฟังก์ชันสร้าง placeholder image แบบ inline SVG
+  // ✅ ฟังก์ชันสร้าง placeholder image แบบปลอดภัย
   const createPlaceholderImage = () => {
-    return `data:image/svg+xml;base64,${btoa(`
+    const svgContent = `
       <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
         <rect width="100%" height="100%" fill="#f3f4f6"/>
         <g>
@@ -161,9 +161,33 @@ const RepairDetail = () => {
           <circle cx="42" cy="32" r="3" fill="#9ca3af"/>
           <polygon points="60,40 50,30 55,25 65,35 75,25 85,35 85,45 35,45" fill="#d1d5db"/>
         </g>
-        <text x="50" y="65" font-family="Arial, sans-serif" font-size="8" fill="#6b7280" text-anchor="middle">ไม่พบรูปภาพ</text>
+        <text x="50" y="65" font-family="Arial, sans-serif" font-size="8" fill="#6b7280" text-anchor="middle">No Image</text>
       </svg>
-    `)}`;
+    `;
+    
+    try {
+      // ใช้ encodeURIComponent แทน btoa สำหรับข้อความที่มีภาษาไทย
+      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgContent)}`;
+    } catch (error) {
+      console.warn('Error creating placeholder:', error);
+      return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjNmNGY2Ii8+PC9zdmc+';
+    }
+  };
+
+  // ✅ ฟังก์ชันจัดการ URL รูปภาพอย่างปลอดภัย
+  const getImageUrl = (filePath) => {
+    if (!filePath) return createPlaceholderImage();
+    
+    // ถ้า filePath เป็น full URL แล้ว ให้ return ตรงๆ
+    if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+      return filePath;
+    }
+    
+    // ถ้าเป็น relative path ให้เพิ่ม base URL
+    const baseUrl = 'http://localhost:5000';
+    const cleanPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
+    
+    return `${baseUrl}${cleanPath}`;
   };
 
   // ✅ ฟังก์ชันแยกรูปภาพทั่วไป
@@ -174,7 +198,7 @@ const RepairDetail = () => {
       repair.images.forEach(img => {
         images.push({
           id: img.id,
-          url: `http://localhost:5000/${img.file_path}`,
+          url: getImageUrl(img.file_path), // ✅ ใช้ฟังก์ชันใหม่
           name: img.file_name || 'รูปภาพ',
           file_path: img.file_path,
           type: 'new'
@@ -185,7 +209,7 @@ const RepairDetail = () => {
     if (repair?.image_path && images.length === 0) {
       images.push({
         id: 'legacy',
-        url: `http://localhost:5000/${repair.image_path}`,
+        url: getImageUrl(repair.image_path), // ✅ ใช้ฟังก์ชันใหม่
         name: 'รูปภาพประกอบ',
         file_path: repair.image_path,
         type: 'legacy'
@@ -203,7 +227,7 @@ const RepairDetail = () => {
       repair.completion_images.forEach(img => {
         images.push({
           id: img.id,
-          url: `http://localhost:5000/${img.file_path}`,
+          url: getImageUrl(img.file_path), // ✅ ใช้ฟังก์ชันใหม่
           name: img.file_name || 'รูปงานเสร็จสิ้น',
           file_path: img.file_path,
           type: 'completion'
@@ -391,10 +415,13 @@ const RepairDetail = () => {
     });
   };
 
-  // ✅ Image Error Handler
+  // ✅ Image Error Handler ที่ปลอดภัย
   const handleImageError = (e, type = 'regular') => {
     console.warn(`${type} image load error:`, e.target.src);
     e.target.src = createPlaceholderImage();
+    
+    // ป้องกันการ loop error
+    e.target.onerror = null;
   };
 
   const headerContent = isMobile ? (

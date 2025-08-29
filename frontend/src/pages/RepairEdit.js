@@ -40,6 +40,14 @@ const RepairEdit = () => {
   const [locationType, setLocationType] = useState('');
   const [isMobile, setIsMobile] = useState(false);
 
+  const getImageUrl = (filePath) => {
+    if (!filePath) return "";
+    if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+      return filePath;
+    }
+    return `${API_BASE_URL}/${filePath.replace(/^\/+/, "")}`;
+  };
+
   useEffect(() => {
     const checkMobile = () => {
       const userAgent = navigator.userAgent;
@@ -364,7 +372,7 @@ const RepairEdit = () => {
             id: img.id,
             file_path: img.file_path,
             name: img.file_name || `รูปภาพ ${index + 1}`,
-            url: `${API_BASE_URL}/${img.file_path}`,
+            url: getImageUrl(img.file_path),
             type: 'new'
           });
         });
@@ -375,7 +383,7 @@ const RepairEdit = () => {
           id: 'legacy',
           file_path: repair.image_path,
           name: 'รูปปัจจุบัน (เก่า)',
-          url: `${API_BASE_URL}/${repair.image_path}`,
+          url: getImageUrl(repair.image_path),
           type: 'legacy'
         });
       }
@@ -391,7 +399,7 @@ const RepairEdit = () => {
             id: img.id,
             file_path: img.file_path,
             name: img.file_name || `รูปเสร็จสิ้น ${index + 1}`,
-            url: `${API_BASE_URL}/${img.file_path}`,
+            url: getImageUrl(img.file_path),
             type: 'completion'
           });
         });
@@ -902,7 +910,7 @@ const RepairEdit = () => {
 
       if (user?.role === 'admin' || user?.role === 'technician') {
         submitData.append('status', formData.status);
-        submitData.append('assigned_to', formData.assigned_to || '');
+                submitData.append('assigned_to', formData.assigned_to || '');
         submitData.append('completion_details', formData.completion_details || '');
 
         const keepCompletionImageData = currentCompletionImages.map(img => ({
@@ -940,6 +948,13 @@ const RepairEdit = () => {
 
       const apiClient = axios.create({
         timeout: 300000,
+      });
+
+      console.log("submitData", {
+        status: formData.status,
+        assigned_to: formData.assigned_to,
+        assigned_to_type: typeof formData.assigned_to,
+        assigned_to_parsed: parseInt(formData.assigned_to, 10)
       });
 
       const response = await apiClient.put(`${API_BASE_URL}/api/repairs/${id}`, submitData, {
