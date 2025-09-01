@@ -14,7 +14,8 @@ import {
   Building,
   MapPin,
   Camera,
-  CheckCircle
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:5000';
@@ -39,6 +40,10 @@ const RepairEdit = () => {
 
   const [locationType, setLocationType] = useState('');
   const [isMobile, setIsMobile] = useState(false);
+  const [showBlockingOption, setShowBlockingOption] = useState(false);
+  const [cannotProceed, setCannotProceed] = useState(false);
+  const [blockingReason, setBlockingReason] = useState('');
+  const [savedBlockingReason, setSavedBlockingReason] = useState('');
 
   const getImageUrl = (filePath) => {
     if (!filePath) return "";
@@ -323,6 +328,24 @@ const RepairEdit = () => {
         assigned_to: repair.assigned_to || '',
         completion_details: repair.completion_details || ''
       });
+
+      if (repair.status === 'in_progress') {
+        setShowBlockingOption(true);
+        try {
+          const reportsResponse = await axios.get(`${API_BASE_URL}/api/tech-reports/${id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+
+          if (reportsResponse.data.success && reportsResponse.data.reports.length > 0) {
+            const latestReport = reportsResponse.data.reports[0];
+            setCannotProceed(true);
+            setBlockingReason(latestReport.report_comment);
+            setSavedBlockingReason(latestReport.report_comment);
+          }
+        } catch (reportError) {
+          console.error('Error fetching reports:', reportError);
+        }
+      }
 
       setSelectedRoomName(parsedRoom);
 
@@ -613,6 +636,27 @@ const RepairEdit = () => {
     }
   };
 
+  const handleStatusChange = (e) => {
+    const newStatus = e.target.value;
+
+    setFormData({
+      ...formData,
+      status: newStatus
+    });
+
+    if (newStatus === 'in_progress') {
+      setShowBlockingOption(true);
+      if (savedBlockingReason) {
+        setBlockingReason(savedBlockingReason);
+        setCannotProceed(true);
+      }
+    } else {
+      setShowBlockingOption(false);
+      setCannotProceed(false);
+      setBlockingReason('');
+    }
+  };
+
   const handleLocationTypeChange = (type) => {
     setLocationType(type);
     setFormData({
@@ -860,6 +904,50 @@ const RepairEdit = () => {
     e.target.src = createPlaceholderImage();
   };
 
+  const submitBlockingReport = async () => {
+    if (!blockingReason.trim()) {
+      toast.error('กรุณากรอกเหตุผลที่ไม่สามารถดำเนินการได้');
+      return false;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+
+      const existingReports = await axios.get(`${API_BASE_URL}/api/tech-reports/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (existingReports.data.reports.length > 0) {
+        const latestReport = existingReports.data.reports[0];
+        if (latestReport.report_comment === blockingReason.trim()) {
+          return true;
+        }
+      }
+
+      const response = await axios.post(`${API_BASE_URL}/api/tech-reports`, {
+        request_id: parseInt(id),
+        report_comment: blockingReason.trim(),
+        created_by: user?.username || ''
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data.success) {
+        setSavedBlockingReason(blockingReason.trim());
+        toast.success('บันทึกรายงานปัญหาเรียบร้อยแล้ว');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error submitting blocking report:', error);
+      toast.error('เกิดข้อผิดพลาดในการบันทึกรายงาน');
+      return false;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -869,6 +957,14 @@ const RepairEdit = () => {
     }
 
     setSaving(true);
+
+    if (cannotProceed && blockingReason.trim()) {
+      const reportSuccess = await submitBlockingReport();
+      if (!reportSuccess) {
+        setSaving(false);
+        return;
+      }
+    }
 
     try {
       const token = localStorage.getItem('token');
@@ -1450,7 +1546,7 @@ const RepairEdit = () => {
                   <select
                     name="status"
                     value={formData.status}
-                    onChange={handleInputChange}
+                    onChange={handleStatusChange}
                     className={`w-full ${isMobile ? 'px-3 py-3' : 'px-4 py-3'} border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isMobile ? 'text-base' : 'text-sm'}`}
                     style={{ fontSize: isMobile ? '16px' : '14px' }}
                   >
@@ -1481,6 +1577,53 @@ const RepairEdit = () => {
                     ))}
                   </select>
                 </div>
+
+                {/* Blocking Option Section */}
+                {showBlockingOption && (
+                  <div className={`${isMobile ? '' : 'md:col-span-2'}`}>
+                    <div className="border border-orange-300 rounded-lg p-4 bg-orange-50">
+                      <div className="flex items-center mb-3">
+                        <AlertCircle className="w-5 h-5 text-orange-500 mr-2" />
+                        <h3 className={`${isMobile ? 'text-sm' : 'text-base'} font-semibold text-orange-800`}>
+                          สถานะการดำเนินการ
+                        </h3>
+                      </div>
+
+                      <div className="space-y-3">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={cannotProceed}
+                            onChange={(e) => setCannotProceed(e.target.checked)}
+                            className="w-4 h-4 text-orange-600 border-orange-300 rounded focus:ring-orange-500"
+                          />
+                          <span className={`ml-2 ${isMobile ? 'text-sm' : 'text-sm'} text-orange-800`}>
+                            ยังไม่สามารถดำเนินการได้ขณะนี้
+                          </span>
+                        </label>
+
+                        {cannotProceed && (
+                          <div>
+                            <label className={`block ${isMobile ? 'text-sm' : 'text-sm'} font-medium text-orange-700 mb-2`}>
+                              เหตุผลที่ไม่สามารถดำเนินการได้
+                            </label>
+                            <textarea
+                              value={blockingReason}
+                              onChange={(e) => setBlockingReason(e.target.value)}
+                              rows={3}
+                              className={`w-full ${isMobile ? 'px-3 py-3' : 'px-3 py-2'} border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white ${isMobile ? 'text-base' : 'text-sm'}`}
+                              placeholder="เช่น รอชิ้นส่วน, ต้องติดต่อผู้เชี่ยวชาญ, อุปกรณ์ไม่พร้อม..."
+                              style={{ fontSize: isMobile ? '16px' : '14px' }}
+                            />
+                            <p className="mt-1 text-xs text-orange-600">
+                              ข้อมูลนี้จะถูกบันทึกเป็นรายงานปัญหา
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {formData.status === 'completed' && (
                   <>

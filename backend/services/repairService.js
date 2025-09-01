@@ -1,4 +1,3 @@
-
 const db = require('../config/database');
 const imageService = require('./imageService');
 
@@ -92,13 +91,19 @@ class RepairService {
         await this.loadRepairImages(repair);
 
         const [history] = await db.execute(`
-            SELECT 
-                sh.*,
-                u.full_name as updated_by_name
-            FROM status_history sh
-            LEFT JOIN users u ON sh.updated_by = u.id
-            WHERE sh.repair_request_id = ?
-            ORDER BY sh.created_at DESC
+        SELECT 
+            sh.*,
+            u.full_name as updated_by_name,
+            tr.report_comment as tech_report_details
+        FROM status_history sh
+        LEFT JOIN users u ON sh.updated_by = u.id
+        LEFT JOIN tech_report_request tr ON (
+            sh.repair_request_id = tr.request_id 
+            AND sh.created_at = tr.created_at
+            AND sh.new_status = 'in_progress'
+        )
+        WHERE sh.repair_request_id = ?
+        ORDER BY sh.created_at DESC
         `, [repairId]);
 
         repair.status_history = history;

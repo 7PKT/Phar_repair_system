@@ -38,10 +38,9 @@ const RepairDetail = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
-  
-  // ✅ เพิ่ม state สำหรับจัดการรูปภาพแยกประเภท
+  const [savedBlockingReason, setSavedBlockingReason] = useState('');
   const [selectedImageType, setSelectedImageType] = useState('regular'); // 'regular' หรือ 'completion'
-  
+
   const [isMobile, setIsMobile] = useState(false);
   const [showActions, setShowActions] = useState(false);
 
@@ -151,7 +150,6 @@ const RepairDetail = () => {
     await fetchRepairDetail();
   };
 
-  // ✅ ฟังก์ชันสร้าง placeholder image แบบปลอดภัย
   const createPlaceholderImage = () => {
     const svgContent = `
       <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
@@ -164,9 +162,8 @@ const RepairDetail = () => {
         <text x="50" y="65" font-family="Arial, sans-serif" font-size="8" fill="#6b7280" text-anchor="middle">No Image</text>
       </svg>
     `;
-    
+
     try {
-      // ใช้ encodeURIComponent แทน btoa สำหรับข้อความที่มีภาษาไทย
       return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgContent)}`;
     } catch (error) {
       console.warn('Error creating placeholder:', error);
@@ -174,23 +171,19 @@ const RepairDetail = () => {
     }
   };
 
-  // ✅ ฟังก์ชันจัดการ URL รูปภาพอย่างปลอดภัย
   const getImageUrl = (filePath) => {
     if (!filePath) return createPlaceholderImage();
-    
-    // ถ้า filePath เป็น full URL แล้ว ให้ return ตรงๆ
+
     if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
       return filePath;
     }
-    
-    // ถ้าเป็น relative path ให้เพิ่ม base URL
+
     const baseUrl = 'http://localhost:5000';
     const cleanPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
-    
+
     return `${baseUrl}${cleanPath}`;
   };
 
-  // ✅ ฟังก์ชันแยกรูปภาพทั่วไป
   const getRegularImages = () => {
     const images = [];
 
@@ -198,7 +191,7 @@ const RepairDetail = () => {
       repair.images.forEach(img => {
         images.push({
           id: img.id,
-          url: getImageUrl(img.file_path), // ✅ ใช้ฟังก์ชันใหม่
+          url: getImageUrl(img.file_path),
           name: img.file_name || 'รูปภาพ',
           file_path: img.file_path,
           type: 'new'
@@ -209,7 +202,7 @@ const RepairDetail = () => {
     if (repair?.image_path && images.length === 0) {
       images.push({
         id: 'legacy',
-        url: getImageUrl(repair.image_path), // ✅ ใช้ฟังก์ชันใหม่
+        url: getImageUrl(repair.image_path),
         name: 'รูปภาพประกอบ',
         file_path: repair.image_path,
         type: 'legacy'
@@ -219,7 +212,6 @@ const RepairDetail = () => {
     return images;
   };
 
-  // ✅ ฟังก์ชันแยกรูปภาพเสร็จสิ้น
   const getCompletionImages = () => {
     const images = [];
 
@@ -227,7 +219,7 @@ const RepairDetail = () => {
       repair.completion_images.forEach(img => {
         images.push({
           id: img.id,
-          url: getImageUrl(img.file_path), // ✅ ใช้ฟังก์ชันใหม่
+          url: getImageUrl(img.file_path),
           name: img.file_name || 'รูปงานเสร็จสิ้น',
           file_path: img.file_path,
           type: 'completion'
@@ -238,7 +230,6 @@ const RepairDetail = () => {
     return images;
   };
 
-  // ✅ ฟังก์ชันรวมรูปภาพทั้งหมด (ใช้สำหรับ modal)
   const getAllImages = () => {
     return [...getRegularImages(), ...getCompletionImages()];
   };
@@ -262,13 +253,13 @@ const RepairDetail = () => {
       toast.error('ไม่มีรูปภาพให้ดาวน์โหลด');
       return;
     }
-    
+
     images.forEach((img, index) => {
       setTimeout(() => {
         downloadImage(img.url, `repair_${repair.id}_image_${index + 1}`);
       }, index * 500);
     });
-    
+
     toast.success(`เริ่มดาวน์โหลด ${images.length} รูป`);
   };
 
@@ -419,7 +410,7 @@ const RepairDetail = () => {
   const handleImageError = (e, type = 'regular') => {
     console.warn(`${type} image load error:`, e.target.src);
     e.target.src = createPlaceholderImage();
-    
+
     // ป้องกันการ loop error
     e.target.onerror = null;
   };
@@ -898,6 +889,11 @@ const RepairDetail = () => {
                       <div className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600 mb-1`}>
                         <strong>โดย:</strong> {history.updated_by_name || 'ไม่ระบุ'}
                       </div>
+                      {history.tech_report_details && (
+                        <div className="...">
+                          <strong>รายงานปัญหา:</strong> {history.tech_report_details}
+                        </div>
+                      )}
                       <div className={`${isMobile ? 'text-xs' : 'text-xs'} text-gray-500 mb-2`}>
                         {formatThaiDate(history.created_at)}
                       </div>
@@ -960,12 +956,12 @@ const RepairDetail = () => {
 
       {/* ✅ Image Modal - ปรับปรุงให้รองรับรูปภาพแยกประเภท */}
       {isImageModalOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-95 z-50"
           onClick={closeImageModal}
         >
           <div className="relative w-full h-full flex items-center justify-center">
-            
+
             {/* Navigation Buttons */}
             {((selectedImageType === 'regular' && regularImages.length > 1) || (selectedImageType === 'completion' && completionImages.length > 1)) && (
               <>
@@ -982,7 +978,7 @@ const RepairDetail = () => {
                 >
                   <ChevronLeft className={`${isMobile ? 'w-8 h-8' : 'w-10 h-10'} text-white`} />
                 </button>
-                
+
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1058,7 +1054,7 @@ const RepairDetail = () => {
                     ) : null;
                   })()}
                 </div>
-                
+
                 {/* Progress Dots */}
                 {(() => {
                   const currentImages = selectedImageType === 'completion' ? completionImages : regularImages;
@@ -1067,11 +1063,10 @@ const RepairDetail = () => {
                       {currentImages.map((_, index) => (
                         <button
                           key={index}
-                          className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} rounded-full transition-all duration-200 ${
-                            index === selectedImageIndex 
-                              ? `scale-110 ${selectedImageType === 'completion' ? 'bg-green-500' : 'bg-white'}` 
-                              : `${selectedImageType === 'completion' ? 'bg-green-300' : 'bg-white'} bg-opacity-50 hover:bg-opacity-80`
-                          }`}
+                          className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} rounded-full transition-all duration-200 ${index === selectedImageIndex
+                            ? `scale-110 ${selectedImageType === 'completion' ? 'bg-green-500' : 'bg-white'}`
+                            : `${selectedImageType === 'completion' ? 'bg-green-300' : 'bg-white'} bg-opacity-50 hover:bg-opacity-80`
+                            }`}
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedImageIndex(index);
@@ -1108,9 +1103,9 @@ const RepairDetail = () => {
             const threshold = 50;
             const maxTime = 300;
 
-            if (Math.abs(deltaX) > Math.abs(deltaY) && 
-                Math.abs(deltaX) > threshold && 
-                deltaTime < maxTime) {
+            if (Math.abs(deltaX) > Math.abs(deltaY) &&
+              Math.abs(deltaX) > threshold &&
+              deltaTime < maxTime) {
               if (deltaX > 0) {
                 prevImage();
               } else {

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jul 25, 2025 at 11:33 AM
+-- Generation Time: Sep 01, 2025 at 04:35 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -60,6 +60,14 @@ CREATE TABLE `completion_images` (
   `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Dumping data for table `completion_images`
+--
+
+INSERT INTO `completion_images` (`id`, `repair_request_id`, `file_path`, `file_name`, `file_size`, `uploaded_at`) VALUES
+(1, 12, 'http://localhost:5000/uploads/completion-images/completion-1756459822771-95903504.jpg', 'free-nature-images.jpg', 200951, '2025-08-29 09:30:22'),
+(2, 13, 'http://localhost:5000/uploads/completion-images/completion-1756460177885-42920656.jpg', 'ai-generated-picture-of-a-tiger-walking-in-the-forest-photo.jpg', 13348, '2025-08-29 09:36:17');
+
 -- --------------------------------------------------------
 
 --
@@ -83,7 +91,11 @@ INSERT INTO `repair_images` (`id`, `repair_request_id`, `file_path`, `file_name`
 (1, 1, 'uploads/repair-images/repair-1752735802054-727149495.PNG', 'Capture.PNG', 203081, '2025-07-17 07:03:22'),
 (2, 2, 'uploads/repair-images/repair-1752737140162-237246520.jpg', 'ai-generated-picture-of-a-tiger-walking-in-the-forest-photo.jpg', 13348, '2025-07-17 07:25:40'),
 (3, 3, 'uploads/repair-images/repair-1752808587291-513070188.png', '13971546034058.png', 532353, '2025-07-18 03:16:27'),
-(5, 5, 'uploads/repair-images/repair-1753243949716-400517846.jpg', 'free-nature-images.jpg', 200951, '2025-07-23 04:12:29');
+(6, 6, 'uploads/repair-images/repair-1755582327139-27316032.jpg', 'free-nature-images.jpg', 200951, '2025-08-19 05:45:27'),
+(7, 7, 'http://localhost:3000/uploads/repair-images/repair-1756445067746-948356918.jpg', 'bird-8788491_1280.jpg', 168056, '2025-08-29 05:24:27'),
+(8, 8, 'uploads/repair-images/repair-1756445168260-935631468.jpg', 'ai-generated-picture-of-a-tiger-walking-in-the-forest-photo.jpg', 13348, '2025-08-29 05:26:08'),
+(15, 12, 'http://localhost:5000/uploads/repair-images/repair-1756457314648-282056090.jpg', 'ai-generated-picture-of-a-tiger-walking-in-the-forest-photo.jpg', 13348, '2025-08-29 08:48:34'),
+(16, 13, 'http://localhost:5000/uploads/repair-images/repair-1756460163402-947953020.jpg', 'bird-8788491_1280.jpg', 168056, '2025-08-29 09:36:03');
 
 -- --------------------------------------------------------
 
@@ -119,7 +131,14 @@ INSERT INTO `repair_requests` (`id`, `title`, `description`, `category_id`, `loc
 (2, 'เสือหลุด', 'เสือหลุดออกมาจกกรง', 5, 'อาคาร 2 ชั้น 2 เครื่องมือกลาง', NULL, NULL, 'high', 'in_progress', '', 3, 2, NULL, '2025-07-17 07:25:40', '2025-07-18 09:19:10', NULL),
 (3, 'ไฟไหม้', 'ไฟไหม้ ห้องวายวอดด', 1, 'อาคาร 1 ชั้น 3 เฟื่องฟ้า', NULL, NULL, 'high', 'pending', '', 1, NULL, NULL, '2025-07-18 03:16:27', '2025-07-18 09:20:46', NULL),
 (4, 'น้ำท่วม', 'น้ำท่วงแทงค์', 2, 'อาคาร 1 ชั้น 3 ห้องเฟื่องฟ้า 3', NULL, NULL, 'urgent', 'pending', NULL, 1, NULL, NULL, '2025-07-21 04:14:32', '2025-07-21 04:35:29', NULL),
-(5, 'ดไำเำพ่ร้ไีรำรี้น่ย่ยๆ่ไอรเัๆดหัดๆะewifjowheuigyuwfgre', 'fwefregergrtfe', 2, 'อาคาร 12 ชั้น 3 ห้องตัวอย่างชั้น 3', NULL, NULL, 'high', 'pending', NULL, 1, NULL, NULL, '2025-07-23 04:12:29', '2025-07-23 04:12:29', NULL);
+(6, 'test123', 'test data 1234', 4, 'อาคาร 7 ชั้น 1 ห้องฏิบัติการยาฉีด', NULL, NULL, 'urgent', 'pending', NULL, 1, NULL, NULL, '2025-08-19 05:45:27', '2025-08-19 05:45:27', NULL),
+(7, 'test file path image', 'test Path image database นะจ๊ะ', 5, 'อาคาร 2 ชั้น 3 ห้องบรรยายผักหวาน (308)', NULL, NULL, 'medium', 'pending', NULL, 1, NULL, NULL, '2025-08-29 05:24:27', '2025-08-29 05:24:27', NULL),
+(8, 'tester path image อีกอัน', 'ลองtest อันเก่า', 5, 'อาคาร 12 ชั้น 1 ห้อง12 อาคารใหม่', NULL, NULL, 'medium', 'pending', NULL, 1, NULL, NULL, '2025-08-29 05:26:08', '2025-08-29 05:26:08', NULL),
+(9, 'เำพเพะ้ะั่ัีา', 'ดำพ้ะ่ัีาีำำแำแำพ้ั', 4, 'อาคาร 9 ชั้น 1 หอพระด้านหน้า', NULL, NULL, 'medium', 'pending', NULL, 1, NULL, NULL, '2025-08-29 05:26:48', '2025-08-29 05:26:48', NULL),
+(10, 'feeefefefefefe', 'fwefwfewfwfwfe', 2, 'อาคาร 6 ชั้น 1 ห้องพักอาจารย์ 7', NULL, NULL, 'high', 'pending', NULL, 1, NULL, NULL, '2025-08-29 05:30:52', '2025-08-29 05:30:52', NULL),
+(11, 'fweguuykbtfrv', 'wfefergrthr', 5, 'ภายนอกอาคาร: fwgregrtjhtjy', NULL, NULL, 'medium', 'pending', NULL, 1, NULL, NULL, '2025-08-29 05:54:35', '2025-08-29 05:54:35', NULL),
+(12, 'ddddddddddd', 'weeeeeeeeeeeeeeeeeeeeeeeeeeeee', 4, 'อาคาร 7 ชั้น 1 ห้องฏิบัติการยาฉีด', NULL, NULL, 'medium', 'assigned', 'oooooooooooooooooooooooooooooo', 1, 2, NULL, '2025-08-29 06:21:15', '2025-08-29 09:35:38', '2025-08-29 09:30:22'),
+(13, 'เพำเพะ่ะัไดำดำำอ', 'ดดำพเพะ้ะั่ะั่ะ', 4, 'อาคาร 1 ชั้น 1 ห้องชั้น10 ใหม่', NULL, NULL, 'medium', 'completed', 'เพำ้พะ่ะัา่ัีาัาัี', 1, 2, NULL, '2025-08-29 09:36:03', '2025-08-29 09:36:17', '2025-08-29 09:36:17');
 
 -- --------------------------------------------------------
 
@@ -286,7 +305,8 @@ INSERT INTO `rooms` (`id`, `name`, `building`, `floor`, `description`, `is_activ
 (180, 'ห้องตัวอย่างชั้น 3', 9, 3, 'ห้องตัวอย่างสำหรับชั้น 3', 1, '2025-07-22 08:34:52', '2025-07-22 08:34:52'),
 (181, 'ห้อง12 อาคารใหม่', 12, 1, 'ห้องตัวอย่างสำหรับอาคาร 12', 1, '2025-07-23 04:11:13', '2025-07-23 04:11:51'),
 (182, 'ห้องตัวอย่างชั้น 2', 12, 2, 'ห้องตัวอย่างสำหรับชั้น 2', 1, '2025-07-23 04:11:19', '2025-07-23 04:11:19'),
-(183, 'ห้องตัวอย่างชั้น 3', 12, 3, 'ห้องตัวอย่างสำหรับชั้น 3', 1, '2025-07-23 04:11:22', '2025-07-23 04:11:22');
+(183, 'ห้องตัวอย่างชั้น 3', 12, 3, 'ห้องตัวอย่างสำหรับชั้น 3', 1, '2025-07-23 04:11:22', '2025-07-23 04:11:22'),
+(184, 'ห้องตัวอย่าง', 13, 1, 'ห้องตัวอย่างสำหรับอาคาร 13', 1, '2025-08-19 05:46:39', '2025-08-19 05:46:39');
 
 -- --------------------------------------------------------
 
@@ -312,7 +332,12 @@ CREATE TABLE `status_history` (
 INSERT INTO `status_history` (`id`, `repair_request_id`, `old_status`, `new_status`, `notes`, `updated_by`, `created_at`, `completion_images`) VALUES
 (1, 1, 'pending', 'assigned', NULL, 1, '2025-07-17 07:23:27', NULL),
 (2, 2, 'pending', 'in_progress', NULL, 1, '2025-07-17 07:26:49', NULL),
-(3, 3, 'pending', 'pending', NULL, 1, '2025-07-18 03:17:38', NULL);
+(3, 3, 'pending', 'pending', NULL, 1, '2025-07-18 03:17:38', NULL),
+(4, 12, 'pending', 'assigned', NULL, 1, '2025-08-29 09:25:55', NULL),
+(5, 12, 'assigned', 'in_progress', NULL, 1, '2025-08-29 09:29:22', NULL),
+(6, 12, 'in_progress', 'completed', 'oooooooooooooooooooooooooooooo', 1, '2025-08-29 09:30:22', NULL),
+(7, 12, 'completed', 'assigned', 'oooooooooooooooooooooooooooooo', 1, '2025-08-29 09:35:38', NULL),
+(8, 13, 'pending', 'completed', 'เพำ้พะ่ะัา่ัีาัาัี', 1, '2025-08-29 09:36:17', NULL);
 
 -- --------------------------------------------------------
 
@@ -351,6 +376,27 @@ INSERT INTO `system_settings` (`id`, `setting_key`, `setting_value`, `setting_ty
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `tech_report_request`
+--
+
+CREATE TABLE `tech_report_request` (
+  `report_id` int(11) NOT NULL,
+  `request_id` int(11) NOT NULL,
+  `report_comment` text NOT NULL,
+  `created_by` varchar(100) NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `tech_report_request`
+--
+
+INSERT INTO `tech_report_request` (`report_id`, `request_id`, `report_comment`, `created_by`, `created_at`) VALUES
+(1, 184, 'รอสั่งของครับ (แก้ไข)', 'EP160047', '2025-08-29 16:20:42');
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `users`
 --
 
@@ -372,8 +418,8 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `email`, `password`, `full_name`, `phone`, `role`, `created_at`, `updated_at`, `last_login`) VALUES
-(1, 'admin', 'admin@test.com', '$2b$10$9wzrqtrGA185wB14FZBSturfKIQpCHGUDvuYQXMP8O0lkqLFTMV8q', 'Admin', NULL, 'admin', '2025-06-19 06:22:38', '2025-07-23 03:48:49', '2025-07-23 03:48:49'),
-(2, 'tech', 'Tech@test.com', '$2b$10$wuWgRwX0R03wK4FC3bTTEumQLXVZ6G5adra/BDq1833U8DR/J2sNe', 'Tech', '1233445566', 'technician', '2025-06-24 07:36:31', '2025-07-22 03:08:47', '2025-07-22 03:08:47'),
+(1, 'admin', 'admin@test.com', '$2b$10$9wzrqtrGA185wB14FZBSturfKIQpCHGUDvuYQXMP8O0lkqLFTMV8q', 'Admin', NULL, 'admin', '2025-06-19 06:22:38', '2025-08-29 09:29:07', '2025-08-29 09:29:07'),
+(2, 'tech', 'Tech@test.com', '$2b$10$wuWgRwX0R03wK4FC3bTTEumQLXVZ6G5adra/BDq1833U8DR/J2sNe', 'Tech', '1233445566', 'technician', '2025-06-24 07:36:31', '2025-08-29 09:26:43', '2025-08-29 09:26:43'),
 (3, 'user', 'user@test.com', '$2a$12$g7vG8PhLhXKptRaQmJ7ZEOUMUX.H0hnhSIKkM5JqWZ3quOsMLcCVW', 'User', NULL, 'user', '2025-06-19 06:22:38', '2025-07-17 07:24:44', '2025-07-17 07:24:44');
 
 --
@@ -441,6 +487,12 @@ ALTER TABLE `system_settings`
   ADD KEY `idx_setting_key` (`setting_key`);
 
 --
+-- Indexes for table `tech_report_request`
+--
+ALTER TABLE `tech_report_request`
+  ADD PRIMARY KEY (`report_id`);
+
+--
 -- Indexes for table `users`
 --
 ALTER TABLE `users`
@@ -463,37 +515,43 @@ ALTER TABLE `categories`
 -- AUTO_INCREMENT for table `completion_images`
 --
 ALTER TABLE `completion_images`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `repair_images`
 --
 ALTER TABLE `repair_images`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT for table `repair_requests`
 --
 ALTER TABLE `repair_requests`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `rooms`
 --
 ALTER TABLE `rooms`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=184;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=185;
 
 --
 -- AUTO_INCREMENT for table `status_history`
 --
 ALTER TABLE `status_history`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `system_settings`
 --
 ALTER TABLE `system_settings`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=743;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1433;
+
+--
+-- AUTO_INCREMENT for table `tech_report_request`
+--
+ALTER TABLE `tech_report_request`
+  MODIFY `report_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `users`
