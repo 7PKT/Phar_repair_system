@@ -4,6 +4,8 @@ const fs = require('fs');
 
 class ImageService {
     constructor() {
+        // เพิ่มการตั้งค่า base URL
+        this.baseUrl = process.env.BASE_URL || 'http://localhost:5000';
         this.ensureDirectories();
     }
 
@@ -54,9 +56,30 @@ class ImageService {
         return filePath.replace(/\\/g, '/');
     }
 
+    // เพิ่มฟังก์ชันแปลง file path เป็น URL
+    pathToUrl(filePath) {
+        if (!filePath) return filePath;
+        const normalizedPath = this.normalizePath(filePath);
+        // แปลง uploads/repair-images/repair-xxx.jpg เป็น http://localhost:3000/uploads/repair-images/repair-xxx.jpg
+        return `${this.baseUrl}/${normalizedPath}`;
+    }
+
+    // เพิ่มฟังก์ชันแปลง URL กลับเป็น file path (สำหรับการลบไฟล์)
+    urlToPath(fileUrl) {
+        if (!fileUrl) return fileUrl;
+        // ตัด base URL ออก เหลือแค่ path
+        return fileUrl.replace(`${this.baseUrl}/`, '');
+    }
+
     deleteFile(filePath) {
         try {
-            const normalizedPath = this.normalizePath(filePath);
+            // ถ้าได้รับ URL ให้แปลงเป็น path ก่อน
+            let actualPath = filePath;
+            if (filePath.startsWith('http')) {
+                actualPath = this.urlToPath(filePath);
+            }
+            
+            const normalizedPath = this.normalizePath(actualPath);
             if (normalizedPath && fs.existsSync(normalizedPath)) {
                 fs.unlinkSync(normalizedPath);
                 return true;
@@ -74,18 +97,38 @@ class ImageService {
         
         const imageInsertPromises = images.map(image => {
             const normalizedPath = this.normalizePath(image.path);
+            // แปลง path เป็น URL ก่อนบันทึกลง database
+            const imageUrl = this.pathToUrl(normalizedPath);
+            
             return connection.execute(`
                 INSERT INTO ${tableName} 
                 (repair_request_id, file_path, file_name, file_size)
                 VALUES (?, ?, ?, ?)
-            `, [repairId, normalizedPath, image.originalname, image.size]);
+            `, [repairId, imageUrl, image.originalname, image.size]);
         });
 
         await Promise.all(imageInsertPromises);
         return images.map(img => ({
-            file_path: this.normalizePath(img.path),
+            file_path: this.pathToUrl(this.normalizePath(img.path)), // ส่งกลับเป็น URL
             file_name: img.originalname,
             file_size: img.size
+        }));
+    }
+
+    // เพิ่มฟังก์ชันสำหรับดึงข้อมูลรูปภาพจาก database และแปลงเป็น URL
+    async getImagesFromDatabase(connection, repairId, type = 'repair') {
+        const tableName = type === 'completion' ? 'completion_images' : 'repair_images';
+        
+        const [rows] = await connection.execute(`
+            SELECT * FROM ${tableName} WHERE repair_request_id = ?
+        `, [repairId]);
+
+        // ถ้า file_path ในฐานข้อมูลยังเป็น path ให้แปลงเป็น URL
+        return rows.map(row => ({
+            ...row,
+            file_path: row.file_path.startsWith('http') 
+                ? row.file_path 
+                : this.pathToUrl(row.file_path)
         }));
     }
 }
